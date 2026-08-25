@@ -26,10 +26,19 @@
       try{
         let response;
         try{
-          response=await fetchImpl(apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:String(action||''),payload:payload||{},token:String(token||'')})});
+          response=await fetchImpl(apiUrl,{method:'POST',redirect:'follow',credentials:'omit',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:String(action||''),payload:payload||{},token:String(token||'')})});
         }catch(networkError){throw ApiError('ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่','NETWORK_ERROR','',null,0);}
         let envelope;
-        try{envelope=await response.json();}catch(parseError){throw ApiError('รูปแบบข้อมูลตอบกลับไม่ถูกต้อง','INVALID_RESPONSE','',null,response.status);}
+        try{
+          if(response&&typeof response.text==='function'){
+            const raw=await response.text();
+            envelope=JSON.parse(raw);
+          }else{
+            envelope=await response.json();
+          }
+        }catch(parseError){
+          throw ApiError('Web App ตอบกลับไม่ใช่ JSON กรุณาตรวจสอบ Apps Script Deploy ให้ใช้ URL /exec และอนุญาตให้ผู้ใช้เข้าถึง Web App','INVALID_RESPONSE','',null,response&&response.status);
+        }
         if(!response.ok||!envelope||envelope.ok!==true){
           const err=envelope&&envelope.error||{};
           throw ApiError(err.message||('HTTP '+response.status),err.code||'API_ERROR',envelope&&envelope.requestId,err.details,response.status);

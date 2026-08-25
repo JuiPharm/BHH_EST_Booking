@@ -38,6 +38,15 @@
     const gridStart=shiftIsoDate(range.startDate,mondayOffset);
     return Array.from({length:42},function(_,i){const date=shiftIsoDate(gridStart,i);return {date:date,inMonth:date>=range.startDate&&date<=range.endDate};});
   }
+
+  function calendarWeekendClass(value){
+    const date=parseIsoDateUTC(value);
+    const day=date.getUTCDay();
+    if(day===6)return 'weekend-sat';
+    if(day===0)return 'weekend-sun';
+    return '';
+  }
+
   function weekRangeMonday(value){
     const date=parseIsoDateUTC(value);
     const day=date.getUTCDay();
@@ -100,5 +109,55 @@
   function escapeHtml(value){
     return String(value===null||value===undefined?'':value).replace(/[&<>'"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch];});
   }
-  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,monthRange,shiftMonth,monthGrid,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,publicAvailabilityLabel,createLatestRequestGate,escapeHtml};
+  function normalizeThaiNationalId(value){
+    return String(value===null||value===undefined?'':value).replace(/\D/g,'');
+  }
+  function isValidThaiNationalId(value){
+    const id=normalizeThaiNationalId(value);
+    if(!/^\d{13}$/.test(id))return false;
+    let sum=0;
+    for(let i=0;i<12;i+=1)sum+=Number(id.charAt(i))*(13-i);
+    const expected=(11-(sum%11))%10;
+    return expected===Number(id.charAt(12));
+  }
+  function notificationHost(host){
+    if(host)return host;
+    if(typeof window!=='undefined')return window;
+    return null;
+  }
+  function fallbackAlert(options,host){
+    const h=notificationHost(host),doc=h&&h.document;
+    if(!doc||!doc.body)return Promise.resolve({fallback:true});
+    const previous=doc.querySelector('.est-alert-fallback');if(previous)previous.remove();
+    const overlay=doc.createElement('div');overlay.className='est-alert-fallback';overlay.setAttribute('role','alertdialog');overlay.setAttribute('aria-modal','true');
+    const box=doc.createElement('div');box.className='est-alert-box';
+    const icon=doc.createElement('div');icon.className='est-alert-icon est-alert-'+String(options&&options.icon||'info');icon.setAttribute('aria-hidden','true');icon.textContent=options&&options.icon==='success'?'✓':options&&options.icon==='error'?'!':options&&options.icon==='warning'?'!':'i';
+    const title=doc.createElement('h2');title.textContent=String(options&&options.title||'แจ้งเตือน');
+    const text=doc.createElement('p');text.textContent=String(options&&options.text||'');
+    const button=doc.createElement('button');button.type='button';button.className='btn btn-primary';button.textContent=String(options&&options.confirmButtonText||'ตกลง');
+    box.appendChild(icon);box.appendChild(title);if(text.textContent)box.appendChild(text);box.appendChild(button);overlay.appendChild(box);doc.body.appendChild(overlay);
+    return new Promise(function(resolve){function close(){overlay.remove();resolve({fallback:true,isConfirmed:true});}button.addEventListener('click',close,{once:true});button.focus();});
+  }
+  function notifySweetAlert(options,host){
+    const h=notificationHost(host);
+    const swal=h&&h.Swal;
+    const config=Object.assign({confirmButtonText:'ตกลง'},options||{});
+    if(!swal||typeof swal.fire!=='function')return fallbackAlert(config,h);
+    try{return Promise.resolve(swal.fire(config)).catch(function(){return fallbackAlert(config,h);});}
+    catch(_error){return fallbackAlert(config,h);}
+  }
+  function notifySuccess(title,text,host){
+    return notifySweetAlert({icon:'success',title:String(title||'สำเร็จ'),text:String(text||'')},host);
+  }
+  function notifyWarning(title,text,host){
+    return notifySweetAlert({icon:'warning',title:String(title||'แจ้งเตือน'),text:String(text||'')},host);
+  }
+  function notifyError(error,title,host){
+    const message=error&&error.message?String(error.message):String(error||'เกิดข้อผิดพลาด');
+    const code=error&&error.code?String(error.code):'';
+    const requestId=error&&error.requestId?String(error.requestId):'';
+    const text=message+(code?'\nError code: '+code:'')+(requestId?'\nReference: '+requestId:'');
+    return notifySweetAlert({icon:'error',title:String(title||'เกิดข้อผิดพลาด'),text:text},host);
+  }
+  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,monthRange,shiftMonth,monthGrid,calendarWeekendClass,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,publicAvailabilityLabel,createLatestRequestGate,escapeHtml,normalizeThaiNationalId,isValidThaiNationalId,notifySweetAlert,notifySuccess,notifyWarning,notifyError};
 });

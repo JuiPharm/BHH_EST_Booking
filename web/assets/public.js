@@ -24,6 +24,23 @@
 
     function showMessage(text,type){const e=$('public-message');e.textContent=text||'';e.className='notice '+(type||'');e.classList.toggle('hidden',!text);}
     function errorText(e){return (e&&e.message?e.message:'เกิดข้อผิดพลาด')+(e&&e.requestId?' (Ref: '+e.requestId+')':'');}
+    function bookingErrorText(e){
+      const code=String(e&&e.code||'').toUpperCase();
+      const messages={
+        INVALID_THAI_ID:'เลขบัตรประชาชนไม่ถูกต้อง กรุณาตรวจสอบเลข 13 หลักอีกครั้ง',
+        SECURITY_NOT_INITIALIZED:'ระบบยังไม่พร้อมรับการจอง กรุณาให้ผู้ดูแลระบบรัน setupSystem() ใน Apps Script ก่อนใช้งาน',
+        SYSTEM_NOT_INITIALIZED:'โครงสร้างระบบยังไม่พร้อม กรุณาให้ผู้ดูแลระบบรัน setupSystem() ก่อนใช้งาน',
+        CALENDAR_NOT_CONFIGURED:'ระบบยังไม่ได้ตั้งค่า Calendar สำหรับ EST กรุณาติดต่อผู้ดูแลระบบ',
+        CALENDAR_NOT_FOUND:'ระบบไม่สามารถเข้าถึง Calendar สำหรับ EST ได้ กรุณาติดต่อผู้ดูแลระบบ',
+        OUTSIDE_BOOKING_WINDOW:'เวลาที่เลือกอยู่นอกช่วงที่เปิดให้จอง กรุณาเลือกวันหรือเวลาใหม่',
+        ACTIVE_FUTURE_BOOKING:'พบว่ามีนัดตรวจในระบบแล้ว หากต้องการเปลี่ยนวันหรือเวลา กรุณาติดต่อโรงพยาบาล',
+        SLOT_FULL:'ช่วงเวลาที่เลือกมีการจองครบแล้ว กรุณาเลือกเวลาอื่น',
+        SLOT_NOT_OPEN:'ช่วงเวลาที่เลือกไม่ได้เปิดให้จอง กรุณาเลือกเวลาใหม่',
+        NETWORK_ERROR:'ไม่สามารถเชื่อมต่อระบบจองได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+        INVALID_RESPONSE:'ระบบจองตอบกลับไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบเพื่อตรวจ Apps Script Web App deployment'
+      };
+      return messages[code]||String(e&&e.message||'เกิดข้อผิดพลาด');
+    }
     function busy(el,on){if(el){el.disabled=!!on;el.classList.toggle('loading',!!on);}}
     let loadingDepth=0;
     function loadingText(action){
@@ -34,7 +51,7 @@
     }
     function beginLoading(action){loadingDepth+=1;const overlay=$('global-loading');$('global-loading-text').textContent=loadingText(action);overlay.classList.remove('hidden');}
     function endLoading(){loadingDepth=Math.max(0,loadingDepth-1);if(!loadingDepth)$('global-loading').classList.add('hidden');}
-    try{client=ESTApi.createApiClient({apiUrl:window.EST_CONFIG&&window.EST_CONFIG.API_URL,onStart:beginLoading,onEnd:endLoading});}catch(e){showMessage(errorText(e),'error');}
+    try{client=ESTApi.createApiClient({apiUrl:window.EST_CONFIG&&window.EST_CONFIG.API_URL,onStart:beginLoading,onEnd:endLoading});}catch(e){showMessage(errorText(e),'error');ESTUi.notifyError(e,'ไม่สามารถเริ่มระบบจองได้',window);}
 
     function statusLabel(day){return ESTUi.publicAvailabilityLabel(day);}
     function displayedRange(){return ESTUi.monthRange(monthAnchor);}
@@ -52,7 +69,7 @@
         renderMonth();
         return calendarData;
       }catch(e){
-        if(monthRequestGate.isLatest(requestId)&&!opts.silent){showMessage(errorText(e),'error');grid.innerHTML='<div class="empty month-error">ไม่สามารถโหลดปฏิทินได้</div>';}
+        if(monthRequestGate.isLatest(requestId)&&!opts.silent){showMessage(errorText(e),'error');ESTUi.notifyError(e,'ไม่สามารถโหลดปฏิทินได้',window);grid.innerHTML='<div class="empty month-error">ไม่สามารถโหลดปฏิทินได้</div>';}
         return calendarData;
       }finally{
         if(monthRequestGate.isLatest(requestId)){
@@ -76,8 +93,11 @@
       ESTUi.monthGrid(monthAnchor).forEach(cell=>{
         const day=calendarData&&calendarData.days?calendarData.days[cell.date]:null;
         const button=document.createElement('button');button.type='button';button.className='month-day';button.dataset.date=cell.date;
+        const weekendClass=ESTUi.calendarWeekendClass(cell.date);if(weekendClass)button.classList.add(weekendClass);
         if(!cell.inMonth){button.classList.add('outside-month');button.disabled=true;}
         if(day)button.classList.add('state-'+String(day.status||'').toLowerCase());
+        if(day&&day.status==='FULL'){button.classList.add('day-full');button.setAttribute('aria-disabled','true');}
+        else if(day&&day.status!=='AVAILABLE')button.setAttribute('aria-disabled','true');
         const dateNo=String(Number(cell.date.slice(-2)));
         button.innerHTML='<span class="day-number">'+dateNo+'</span><span class="day-status">'+ESTUi.escapeHtml(statusLabel(day))+'</span>';
         if(cell.inMonth){button.setAttribute('aria-label',ESTUi.formatThaiDate(cell.date)+' '+statusLabel(day));button.addEventListener('click',()=>onDateClick(cell.date,day,button));}
@@ -86,7 +106,11 @@
     }
     function onDateClick(date,day,button){
       lastDateButton=button;
-      if(!day||day.status!=='AVAILABLE'){showMessage(copy[day&&day.status]||copy.NOT_SCHEDULED,'warning');return;}
+      if(!day||day.status!=='AVAILABLE'){
+        const text=copy[day&&day.status]||copy.NOT_SCHEDULED;showMessage(text,'warning');
+        if(day&&day.status==='FULL')ESTUi.notifyWarning('รอบตรวจเต็มแล้ว','วันที่เลือกมีการจองครบแล้ว กรุณาเลือกวันที่อื่นที่ยังมีที่ว่าง',window);
+        return;
+      }
       showMessage('','');openSlots(date);
     }
     async function openSlots(date,options){
@@ -101,7 +125,7 @@
           if(!b.disabled)b.addEventListener('click',()=>chooseSlot(slot));$('slot-list').appendChild(b);
         });
         if(!$('slot-list').children.length)$('slot-list').innerHTML='<div class="empty">'+copy.NOT_SCHEDULED+'</div>';
-      }catch(e){$('slot-list').innerHTML='<div class="notice error">'+ESTUi.escapeHtml(errorText(e))+'</div>';}
+      }catch(e){$('slot-list').innerHTML='<div class="notice error">'+ESTUi.escapeHtml(errorText(e))+'</div>';ESTUi.notifyError(e,'ไม่สามารถโหลดเวลาว่างได้',window);}
     }
     function chooseSlot(slot){selectedSlot=slot;$('slot-dialog').close();$('selected-slot-summary').textContent='วันตรวจ '+ESTUi.formatThaiDate(selectedDate)+' เวลา '+slot.startTime+'–'+slot.endTime;$('patient-section').classList.remove('hidden');$('patient-section').scrollIntoView({behavior:'smooth',block:'start'});}
     $('slot-dialog-close').addEventListener('click',()=>$('slot-dialog').close());
@@ -121,7 +145,7 @@
       if(dialog.open&&selectedDate){
         const day=calendarData&&calendarData.days?calendarData.days[selectedDate]:null;
         if(day&&day.status==='AVAILABLE')await openSlots(selectedDate,{silent:true});
-        else if(day&&day.status!=='AVAILABLE'){dialog.close();showMessage(copy[day.status]||copy.NOT_SCHEDULED,'warning');}
+        else if(day&&day.status!=='AVAILABLE'){dialog.close();showMessage(copy[day.status]||copy.NOT_SCHEDULED,'warning');if(day.status==='FULL')ESTUi.notifyWarning('รอบตรวจเต็มแล้ว','วันที่เลือกมีการจองครบแล้ว กรุณาเลือกวันที่อื่นที่ยังมีที่ว่าง',window);}
       }
     }
     if(syncChannel)syncChannel.addEventListener('message',event=>{
@@ -135,19 +159,35 @@
     $('patient-form').addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget;
-      if(!selectedDate||!selectedSlot){showMessage('กรุณาเลือกวันและเวลาตรวจก่อน','error');return;}
-      const data=Object.fromEntries(new FormData(form).entries());data.appointmentDate=selectedDate;data.startTime=selectedSlot.startTime;
+      if(!selectedDate||!selectedSlot){const e=new Error('กรุณาเลือกวันและเวลาตรวจก่อน');showMessage(e.message,'error');ESTUi.notifyError(e,'ข้อมูลการจองไม่ครบ',window);return;}
       const button=$('submit-booking');busy(button,true);showMessage('','');
       try{
+        const thaiNationalId=ESTUi.normalizeThaiNationalId(form.elements.thaiNationalId.value);
+        if(!ESTUi.isValidThaiNationalId(thaiNationalId)){const invalid=new Error('เลขบัตรประชาชนไม่ถูกต้อง');invalid.code='INVALID_THAI_ID';throw invalid;}
+        const data={
+          firstName:String(form.elements.firstName.value||'').trim(),
+          lastName:String(form.elements.lastName.value||'').trim(),
+          dob:String(form.elements.dob.value||'').trim(),
+          phone:String(form.elements.phone.value||'').trim(),
+          email:String(form.elements.email.value||'').trim(),
+          thaiNationalId:thaiNationalId,
+          underlyingDisease:String(form.elements.underlyingDisease.value||'').trim(),
+          appointmentDate:selectedDate,
+          startTime:selectedSlot.startTime
+        };
         const result=await client.call('public.booking.create',data);
         const fields=[['Booking Reference',result.bookingReference],['ชื่อผู้รับบริการ',(result.firstName||'')+' '+(result.lastName||'')],['วันที่ตรวจ',result.appointmentDate],['เวลา',result.startTime],['สถานะ',result.status||'CONFIRMED']];
         $('confirmation-summary').innerHTML=fields.map(x=>'<dt>'+ESTUi.escapeHtml(x[0])+'</dt><dd>'+ESTUi.escapeHtml(x[1]||'')+'</dd>').join('');
         $('patient-section').classList.add('hidden');$('confirmation-panel').classList.remove('hidden');
         form.reset();selectedSlot=null;
         notifyBookingViewsChanged({type:'booking-changed',date:result.appointmentDate});
+        ESTUi.notifySuccess('จองสำเร็จ','Booking Reference: '+String(result.bookingReference||'')+' · '+String(result.appointmentDate||'')+' '+String(result.startTime||''),window);
         await loadMonth({silent:true,force:true});
       }catch(e){
-        showMessage(errorText(e),'error');
+        const friendly=bookingErrorText(e);
+        const displayError=new Error(friendly);displayError.code=e&&e.code;displayError.requestId=e&&e.requestId;
+        showMessage(errorText(displayError),'error');
+        ESTUi.notifyError(displayError,'ไม่สามารถจองได้',window);
         if(e&&e.code==='SLOT_FULL'){await loadMonth({silent:true,force:true});if(selectedDate)openSlots(selectedDate);}
       }finally{busy(button,false);}
     });

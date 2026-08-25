@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="th">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#006b78"><link rel="icon" href="assets/favicon.ico"><link rel="apple-touch-icon" href="assets/apple-touch-icon.png"><title>EST Admin Dashboard</title><link rel="stylesheet" href="assets/styles.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#006b78"><link rel="icon" href="assets/favicon.ico"><link rel="apple-touch-icon" href="assets/apple-touch-icon.png"><title>EST Admin Dashboard</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.min.css"><link rel="stylesheet" href="assets/styles.css"></head>
 <body>
 <header class="site-header"><div class="header-inner"><div class="brand"><img class="brand-logo" src="assets/bhh-logo.jpg" alt="Bangkok Hospital Hat Yai"><span>EST Admin Dashboard<small>จัดการตารางตรวจและนัดหมาย</small></span></div><a class="btn btn-ghost header-link" href="index.html">หน้าจองผู้รับบริการ</a></div></header>
 <main class="container">
@@ -44,5 +44,5 @@
 <dialog id="password-dialog" aria-labelledby="password-dialog-title"><div class="dialog-body"><div class="dialog-header"><h2 id="password-dialog-title">เปลี่ยน Password</h2><button class="icon-btn" id="password-close" data-close-dialog="password-dialog" type="button" aria-label="ปิด">×</button></div><form id="password-form"><input type="hidden" name="targetStaffId"><div class="field" id="current-password-field"><label>รหัสผ่านปัจจุบัน</label><input type="password" name="currentPassword" autocomplete="current-password"></div><div class="field field-wide"><label>รหัสผ่านใหม่</label><input type="password" name="newPassword" minlength="12" autocomplete="new-password" required></div><div class="actions"><button class="btn btn-primary" type="submit">บันทึก Password</button><button id="password-cancel" class="btn btn-ghost" data-close-dialog="password-dialog" type="button">ยกเลิก</button></div></form></div></dialog>
 
 <div id="global-loading" class="loading-overlay hidden" role="status" aria-live="polite" aria-busy="true"><div class="loading-card"><span class="spinner" aria-hidden="true"></span><strong id="global-loading-text">กำลังดำเนินการ...</strong></div></div>
-<script src="config.js"></script><script src="assets/api.js"></script><script src="assets/ui-utils.js"></script><script src="assets/admin.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.all.min.js"></script><script src="config.js"></script><script src="assets/api.js"></script><script src="assets/ui-utils.js"></script><script src="assets/admin.js"></script>
 </body></html>

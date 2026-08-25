@@ -61,9 +61,24 @@
   client=Api.createApiClient({apiUrl:String(CONFIG.API_URL||''),onStart:a=>setLoading(true,loadingText[a]||'กำลังดำเนินการ...'),onEnd:()=>setLoading(false)});
 
   function apiCall(action,payload,options){return client.call(action,payload||{},token,options);}
-  function message(target,text,type){
+  function notifySuccess(title,text){return UI.notifySuccess(title,text||'',root);}
+  function notifyWarning(title,text){return UI.notifyWarning(title,text||'',root);}
+  function notifyError(error,title){return UI.notifyError(error,title||'เกิดข้อผิดพลาด',root);}
+  function renderMessage(target,text,type){
     const el=$(target); if(!el)return;
     el.textContent=String(text||''); el.className='notice '+String(type||''); el.classList.toggle('hidden',!text);
+  }
+  function message(target,text,type){
+    renderMessage(target,text,type);
+    if(type==='error'&&text)notifyError({message:String(text)},'เกิดข้อผิดพลาด');
+  }
+  function reportError(error,title,target){
+    renderMessage(target||'dashboard-message',errorText(error),'error');
+    return notifyError(error,title||'เกิดข้อผิดพลาด');
+  }
+  function runAsync(task,title,target){
+    try{return Promise.resolve().then(task).catch(function(error){reportError(error,title,target);return null;});}
+    catch(error){reportError(error,title,target);return Promise.resolve(null);}
   }
   function errorText(error){
     if(!error)return 'เกิดข้อผิดพลาด';
@@ -102,14 +117,18 @@
     const byDate={};(calendarData.events||[]).forEach(e=>{(byDate[e.date]||(byDate[e.date]=[])).push(e);});
     UI.monthGrid(monthAnchor).forEach(cell=>{
       const day=doc.createElement('div');day.className='admin-day'+(cell.inMonth?'':' outside-month');
+      const weekendClass=UI.calendarWeekendClass(cell.date);if(weekendClass)day.classList.add(weekendClass);
       const head=doc.createElement('div');head.className='admin-day-head';head.innerHTML='<span class="day-number">'+Number(cell.date.slice(8,10))+'</span>';
       day.appendChild(head);const stack=doc.createElement('div');stack.className='event-stack';
       const events=(byDate[cell.date]||[]).slice().sort((a,b)=>String(a.startTime).localeCompare(String(b.startTime)));
+      const occupancies=events.map(eventOccupancy);const dayCapacity=occupancies.reduce((n,o)=>n+o.capacity,0);const dayBooked=occupancies.reduce((n,o)=>n+o.booked,0);
+      if(events.length&&dayCapacity>0&&dayBooked>=dayCapacity){day.classList.add('day-full');day.setAttribute('data-capacity-state','full');}
       events.slice(0,3).forEach(event=>{
         const id=eventIdOf(event);const occ=eventOccupancy(event);const card=doc.createElement('button');card.type='button';card.className='event-card';
-        card.innerHTML='<strong>'+safeHtml(event.startTime)+'–'+safeHtml(event.endTime)+' · '+safeHtml(event.title||('OPEN-'+event.rooms))+'</strong><small>'+occ.booked+'/'+occ.capacity+' booked</small>';
+        if(occ.capacity>0&&occ.booked>=occ.capacity)card.classList.add('event-full');
+        card.innerHTML='<strong>'+safeHtml(event.startTime)+'–'+safeHtml(event.endTime)+' · '+safeHtml(event.title||('OPEN-'+event.rooms))+'</strong><small>'+occ.booked+'/'+occ.capacity+' booked'+(occ.capacity>0&&occ.booked>=occ.capacity?' · เต็มแล้ว':'')+'</small>';
         card.setAttribute('aria-label','ดูรายละเอียดรอบตรวจ '+String(event.startTime||'')+' '+occ.booked+' จาก '+occ.capacity+' ราย');
-        card.addEventListener('click',()=>openEventDetail(event.eventId,card));
+        card.addEventListener('click',()=>runAsync(()=>openEventDetail(event.eventId,card),'ไม่สามารถโหลดรายละเอียดรอบตรวจได้'));
         if(!id)card.disabled=true;
         stack.appendChild(card);
       });
@@ -144,12 +163,12 @@
       tr.innerHTML='<td>'+safeHtml(row.startTime)+'</td><td>'+safeHtml(ref)+'</td><td>'+safeHtml((row.firstName||'')+' '+(row.lastName||''))+'</td><td>'+statusPill(row.status)+'</td><td><div class="row-actions"></div></td>';
       const actions=tr.querySelector('.row-actions');
       const add=(label,fn,cls)=>{const b=doc.createElement('button');b.type='button';b.className='btn btn-small '+(cls||'');b.textContent=label;b.addEventListener('click',fn);actions.appendChild(b);};
-      add('ดูรายละเอียด',()=>openBookingFromReference(ref));
+      add('ดูรายละเอียด',()=>runAsync(()=>openBookingFromReference(ref),'ไม่สามารถโหลดข้อมูลการจองได้'));
       if(String(row.status)==='CONFIRMED'){
-        add('เปลี่ยนนัด',()=>openRescheduleFromReference(ref));
-        add('ยกเลิก',()=>cancelBookingFromReference(ref),'btn-danger');
+        add('เปลี่ยนนัด',()=>runAsync(()=>openRescheduleFromReference(ref),'ไม่สามารถเปิดรายการเปลี่ยนนัดได้'));
+        add('ยกเลิก',()=>runAsync(()=>cancelBookingFromReference(ref),'ไม่สามารถเปิดรายการยกเลิกนัดได้'),'btn-danger');
         const ended=bookingIsEnded(row,eventDetailData.serverNow?Date.parse(eventDetailData.serverNow):Date.now());
-        const out=doc.createElement('button');out.type='button';out.className='btn btn-small';out.textContent='บันทึกผล';out.disabled=!ended;out.title=ended?'':'บันทึกผลได้หลังเวลานัดสิ้นสุด';out.addEventListener('click',()=>openOutcomeFromReference(ref));actions.appendChild(out);
+        const out=doc.createElement('button');out.type='button';out.className='btn btn-small';out.textContent='บันทึกผล';out.disabled=!ended;out.title=ended?'':'บันทึกผลได้หลังเวลานัดสิ้นสุด';out.addEventListener('click',()=>runAsync(()=>openOutcomeFromReference(ref),'ไม่สามารถเปิดรายการบันทึกผลได้'));actions.appendChild(out);
       }
       body.appendChild(tr);
     });
@@ -193,12 +212,12 @@
   function resetScheduleDisabled(){const f=$('schedule-form');if(f)f.elements.endDate.disabled=false;}
   async function performScheduleUpdate(event,payload,reason){
     const p=Object.assign({},payload,{eventId:eventIdOf(event)});if(reason)Object.assign(p,{confirmImpact:true,reasonCode:reason.code,reasonDetail:reason.detail});
-    await apiCall('admin.calendar.update',p);closeDialog('schedule-dialog');closeDialog('reason-dialog');notifyChanged('schedule-changed',payload.date);message('dashboard-message','บันทึกรอบตรวจสำเร็จ','success');await bestEffortRefresh({detail:true});
+    await apiCall('admin.calendar.update',p);closeDialog('schedule-dialog');closeDialog('reason-dialog');notifyChanged('schedule-changed',payload.date);message('dashboard-message','บันทึกรอบตรวจสำเร็จ','success');notifySuccess('บันทึกรอบตรวจสำเร็จ',String(payload.date||'')+' '+String(payload.startTime||'')+'–'+String(payload.endTime||''));await bestEffortRefresh({detail:true});
   }
   async function deleteCurrentEvent(){
     const event=eventDetailData&&eventDetailData.event;if(!event||isEventReadOnly(event))return;
     const impact=await previewSchedule('DELETE',event,{});
-    const run=async reason=>{await apiCall('admin.calendar.delete',{eventId:eventIdOf(event),confirmImpact:true,reasonCode:reason.code,reasonDetail:reason.detail});closeDialog('reason-dialog');closeDialog('event-detail-dialog');notifyChanged('schedule-changed',event.date);message('dashboard-message','ลบรอบตรวจสำเร็จ','success');await bestEffortRefresh();};
+    const run=async reason=>{await apiCall('admin.calendar.delete',{eventId:eventIdOf(event),confirmImpact:true,reasonCode:reason.code,reasonDetail:reason.detail});closeDialog('reason-dialog');closeDialog('event-detail-dialog');notifyChanged('schedule-changed',event.date);message('dashboard-message','ลบรอบตรวจสำเร็จ','success');notifySuccess('ลบรอบตรวจสำเร็จ',String(event.date||'')+' '+String(event.startTime||'')+'–'+String(event.endTime||''));await bestEffortRefresh();};
     openReasonDialog('ยืนยันลบรอบตรวจ',impact,run);
   }
 
@@ -210,13 +229,18 @@
   async function loadAdminBookingSlots(date,selectedTime){
     const f=$('admin-booking-form');
     const select=f.elements.startTime;
+    const submit=f.querySelector('button[type="submit"]');submit.disabled=true;
     const target=String(date||'').trim();
     select.innerHTML='<option value="">'+(target?'กำลังโหลดเวลาว่าง...':'เลือกวันที่ก่อน')+'</option>';
     select.disabled=true;
     if(!target){select.disabled=false;return [];}
     try{
       const result=await apiCall('admin.calendar.list',{startDate:target,endDate:target});
-      const slots=UI.flattenAdminSlots(result&&result.events||[],target).filter(slot=>isoDateTimeMs(target,slot.startTime)>=Date.now());
+      const events=result&&result.events||[];const now=Date.now();
+      const futureSlots=[];events.forEach(event=>(event.slots||[]).forEach(slot=>{if(isoDateTimeMs(target,slot.startTime)>=now)futureSlots.push(slot);}));
+      const slots=UI.flattenAdminSlots(events,target).filter(slot=>isoDateTimeMs(target,slot.startTime)>=now);
+      submit.disabled=!slots.length;
+      if(events.length&&futureSlots.length&&!slots.length){notifyWarning('รอบตรวจเต็มแล้ว','วันที่เลือกมีการจองครบแล้ว ไม่สามารถเพิ่มนัดได้ กรุณาเลือกวันที่หรือช่วงเวลาอื่น');}
       select.innerHTML='<option value="">เลือกเวลา</option>';
       slots.forEach(slot=>{
         const o=doc.createElement('option');
@@ -245,21 +269,21 @@
   async function openRescheduleFromReference(ref){const row=await ensureBooking(ref);if(row)setBookingMode('reschedule',row);}
   async function cancelBookingFromReference(ref){
     const row=await ensureBooking(ref);if(!row)return;
-    openReasonDialog('ยืนยันยกเลิกนัด',{affectedBookingCount:1},async reason=>{await apiCall('admin.booking.cancel',{bookingId:row.bookingId,bookingReference:row.bookingReference,reasonCode:reason.code,reasonDetail:reason.detail});closeDialog('reason-dialog');notifyChanged('booking-changed',row.appointmentDate);message('dashboard-message','ยกเลิกนัดสำเร็จ','success');await bestEffortRefresh({bookings:true,detail:true});});
+    openReasonDialog('ยืนยันยกเลิกนัด',{affectedBookingCount:1},async reason=>{await apiCall('admin.booking.cancel',{bookingId:row.bookingId,bookingReference:row.bookingReference,reasonCode:reason.code,reasonDetail:reason.detail});closeDialog('reason-dialog');notifyChanged('booking-changed',row.appointmentDate);message('dashboard-message','ยกเลิกนัดสำเร็จ','success');notifySuccess('ยกเลิกนัดสำเร็จ',String(row.bookingReference||''));await bestEffortRefresh({bookings:true,detail:true});});
   }
   async function openOutcomeFromReference(ref){const row=await ensureBooking(ref);if(!row)return;outcomeBooking=row;$('outcome-booking-label').textContent=String(row.bookingReference||'')+' · '+String(row.firstName||'')+' '+String(row.lastName||'');showDialog('outcome-dialog');}
   async function submitOutcome(status){
-    const row=outcomeBooking;if(!row)return;await apiCall('admin.booking.outcome',{bookingId:row.bookingId,bookingReference:row.bookingReference,status:status});closeDialog('outcome-dialog');notifyChanged('booking-changed',row.appointmentDate);message('dashboard-message','บันทึกผล '+status+' สำเร็จ','success');await bestEffortRefresh({bookings:true,detail:true});
+    const row=outcomeBooking;if(!row)return;await apiCall('admin.booking.outcome',{bookingId:row.bookingId,bookingReference:row.bookingReference,status:status});closeDialog('outcome-dialog');notifyChanged('booking-changed',row.appointmentDate);message('dashboard-message','บันทึกผล '+status+' สำเร็จ','success');notifySuccess('บันทึกผลสำเร็จ',String(row.bookingReference||'')+' · '+String(status||''));await bestEffortRefresh({bookings:true,detail:true});
   }
   function renderBookings(){
     const body=$('booking-table-body');body.innerHTML='';
     bookings.forEach(row=>{const tr=doc.createElement('tr');if(String(row.status)==='CANCELLED')tr.classList.add('row-cancelled');tr.innerHTML='<td>'+safeHtml(row.appointmentDate)+'<br>'+safeHtml(row.startTime)+'</td><td>'+safeHtml(row.bookingReference)+'</td><td>'+safeHtml((row.firstName||'')+' '+(row.lastName||''))+'</td><td>'+safeHtml(row.phone||'-')+'<br>'+safeHtml(row.email||'')+'</td><td>'+statusPill(row.status)+'</td><td><div class="row-actions"></div></td>';
-      const a=tr.querySelector('.row-actions');const add=(label,fn,cls)=>{const b=doc.createElement('button');b.type='button';b.className='btn btn-small '+(cls||'');b.textContent=label;b.onclick=fn;a.appendChild(b);};add('ดู',()=>openBookingFromReference(row.bookingReference));if(String(row.status)==='CONFIRMED'){add('เปลี่ยนนัด',()=>setBookingMode('reschedule',row));add('ยกเลิก',()=>cancelBookingFromReference(row.bookingReference),'btn-danger');if(bookingIsEnded(row,Date.now()))add('ผล',()=>openOutcomeFromReference(row.bookingReference));}body.appendChild(tr);});
+      const a=tr.querySelector('.row-actions');const add=(label,fn,cls)=>{const b=doc.createElement('button');b.type='button';b.className='btn btn-small '+(cls||'');b.textContent=label;b.onclick=fn;a.appendChild(b);};add('ดู',()=>runAsync(()=>openBookingFromReference(row.bookingReference),'ไม่สามารถโหลดข้อมูลการจองได้'));if(String(row.status)==='CONFIRMED'){add('เปลี่ยนนัด',()=>setBookingMode('reschedule',row));add('ยกเลิก',()=>runAsync(()=>cancelBookingFromReference(row.bookingReference),'ไม่สามารถเปิดรายการยกเลิกนัดได้'),'btn-danger');if(bookingIsEnded(row,Date.now()))add('ผล',()=>runAsync(()=>openOutcomeFromReference(row.bookingReference),'ไม่สามารถเปิดรายการบันทึกผลได้'));}body.appendChild(tr);});
   }
   async function loadBookings(options){const result=await apiCall('admin.bookings.list',filtersPayload(),options);bookings=result&&result.bookings||[];renderBookings();return result;}
 
   function renderUsers(){
-    const body=$('users-table-body');body.innerHTML='';users.forEach(u=>{const tr=doc.createElement('tr');const active=!!(u.active===true||String(u.active).toUpperCase()==='TRUE');tr.innerHTML='<td>'+safeHtml(u.staffId||u.StaffID)+'</td><td>'+safeHtml(u.name||u.Name)+'</td><td>'+safeHtml(u.role||u.Role)+'</td><td>'+(active?'ACTIVE':'INACTIVE')+'</td><td><div class="row-actions"></div></td>';const a=tr.querySelector('.row-actions');const staff=String(u.staffId||u.StaffID||'');const toggle=doc.createElement('button');toggle.type='button';toggle.className='btn btn-small';toggle.textContent=active?'ปิดบัญชี':'เปิดบัญชี';toggle.onclick=async()=>{await apiCall('superadmin.user.setActive',{staffId:staff,active:!active});await loadUsers();};a.appendChild(toggle);const reset=doc.createElement('button');reset.type='button';reset.className='btn btn-small';reset.textContent='Reset Password';reset.onclick=()=>openPasswordDialog('reset',staff);a.appendChild(reset);body.appendChild(tr);});
+    const body=$('users-table-body');body.innerHTML='';users.forEach(u=>{const tr=doc.createElement('tr');const active=!!(u.active===true||String(u.active).toUpperCase()==='TRUE');tr.innerHTML='<td>'+safeHtml(u.staffId||u.StaffID)+'</td><td>'+safeHtml(u.name||u.Name)+'</td><td>'+safeHtml(u.role||u.Role)+'</td><td>'+(active?'ACTIVE':'INACTIVE')+'</td><td><div class="row-actions"></div></td>';const a=tr.querySelector('.row-actions');const staff=String(u.staffId||u.StaffID||'');const toggle=doc.createElement('button');toggle.type='button';toggle.className='btn btn-small';toggle.textContent=active?'ปิดบัญชี':'เปิดบัญชี';toggle.onclick=()=>runAsync(async()=>{await apiCall('superadmin.user.setActive',{staffId:staff,active:!active});await loadUsers();},'ไม่สามารถเปลี่ยนสถานะบัญชีได้');a.appendChild(toggle);const reset=doc.createElement('button');reset.type='button';reset.className='btn btn-small';reset.textContent='Reset Password';reset.onclick=()=>openPasswordDialog('reset',staff);a.appendChild(reset);body.appendChild(tr);});
   }
   async function loadUsers(){if(!profile||profile.role!=='SUPER_ADMIN')return;const result=await apiCall('superadmin.users.list',{});users=result&&result.users||result||[];renderUsers();}
 
@@ -298,12 +322,12 @@
     $('event-detail-refresh').onclick=()=>refreshEventDetail().catch(e=>message('dashboard-message',errorText(e),'error'));
     $('event-edit').onclick=()=>{const event=eventDetailData&&eventDetailData.event;if(event){closeDialog('event-detail-dialog');openScheduleEdit(event);}};
     $('event-delete').onclick=()=>deleteCurrentEvent().catch(e=>message('dashboard-message',errorText(e),'error'));
-    $('schedule-form').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.currentTarget;const id=String(f.elements.eventId.value||'');const payload={startDate:f.elements.startDate.value,endDate:f.elements.endDate.disabled?f.elements.startDate.value:f.elements.endDate.value,startTime:f.elements.startTime.value,endTime:f.elements.endTime.value,rooms:Number(f.elements.rooms.value)};try{if(!id){await apiCall('admin.calendar.bulkCreate',Object.assign({},payload,{idempotencyKey:(root.crypto&&root.crypto.randomUUID?root.crypto.randomUUID():'bulk-'+Date.now())}));closeDialog('schedule-dialog');resetScheduleDisabled();notifyChanged('schedule-changed',payload.startDate);message('dashboard-message','เปิดห้องตรวจสำเร็จ','success');await bestEffortRefresh();}else{const event={eventId:id,date:f.elements.startDate.value,startTime:f.elements.startTime.value,endTime:f.elements.endTime.value,rooms:payload.rooms};const updatePayload={date:payload.startDate,startTime:payload.startTime,endTime:payload.endTime,rooms:payload.rooms};const impact=await previewSchedule('UPDATE',event,updatePayload);if(impact&&impact.requiresConfirmation)openReasonDialog('ยืนยันแก้ไขรอบตรวจ',impact,r=>performScheduleUpdate(event,updatePayload,r));else await performScheduleUpdate(event,updatePayload,null);}}catch(e){message('dashboard-message',errorText(e),'error');}});
+    $('schedule-form').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.currentTarget;const id=String(f.elements.eventId.value||'');const payload={startDate:f.elements.startDate.value,endDate:f.elements.endDate.disabled?f.elements.startDate.value:f.elements.endDate.value,startTime:f.elements.startTime.value,endTime:f.elements.endTime.value,rooms:Number(f.elements.rooms.value)};try{if(!id){await apiCall('admin.calendar.bulkCreate',Object.assign({},payload,{idempotencyKey:(root.crypto&&root.crypto.randomUUID?root.crypto.randomUUID():'bulk-'+Date.now())}));closeDialog('schedule-dialog');resetScheduleDisabled();notifyChanged('schedule-changed',payload.startDate);message('dashboard-message','เปิดห้องตรวจสำเร็จ','success');notifySuccess('เปิดห้องตรวจสำเร็จ',String(payload.startDate||'')+(payload.endDate&&payload.endDate!==payload.startDate?' ถึง '+String(payload.endDate):'')+' · '+String(payload.startTime||'')+'–'+String(payload.endTime||'')+' · '+String(payload.rooms||1)+' ห้อง');await bestEffortRefresh();}else{const event={eventId:id,date:f.elements.startDate.value,startTime:f.elements.startTime.value,endTime:f.elements.endTime.value,rooms:payload.rooms};const updatePayload={date:payload.startDate,startTime:payload.startTime,endTime:payload.endTime,rooms:payload.rooms};const impact=await previewSchedule('UPDATE',event,updatePayload);if(impact&&impact.requiresConfirmation)openReasonDialog('ยืนยันแก้ไขรอบตรวจ',impact,r=>performScheduleUpdate(event,updatePayload,r));else await performScheduleUpdate(event,updatePayload,null);}}catch(e){message('dashboard-message',errorText(e),'error');}});
     $('reason-confirm').onclick=async()=>{if(!pendingReasonAction)return;const code=$('reason-code').value,detail=$('reason-detail').value.trim();if(!code){message('dashboard-message','กรุณาเลือกเหตุผล','error');return;}const cb=pendingReasonAction;try{await cb({code,detail});pendingReasonAction=null;}catch(e){message('dashboard-message',errorText(e),'error');}};
     $('booking-search').onclick=()=>loadBookings().catch(e=>message('dashboard-message',errorText(e),'error'));
     $('add-booking').onclick=()=>setBookingMode('create',null);
     $('admin-booking-form').elements.appointmentDate.addEventListener('change',ev=>loadAdminBookingSlots(ev.currentTarget.value,'').catch(e=>message('dashboard-message',errorText(e),'error')));
-    $('admin-booking-form').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.currentTarget,mode=f.elements.mode.value;try{if(mode==='create'){const payload={appointmentDate:f.elements.appointmentDate.value,startTime:f.elements.startTime.value,firstName:f.elements.firstName.value.trim(),lastName:f.elements.lastName.value.trim(),dob:f.elements.dob.value,phone:f.elements.phone.value.trim(),email:f.elements.email.value.trim(),thaiNationalId:f.elements.thaiNationalId.value.trim(),underlyingDisease:f.elements.underlyingDisease.value.trim()};await apiCall('admin.booking.create',payload);closeDialog('booking-dialog');notifyChanged('booking-changed',payload.appointmentDate);message('dashboard-message','เพิ่มนัดสำเร็จ','success');await bestEffortRefresh({bookings:true,detail:true});}else if(activeBooking){const payload={bookingId:activeBooking.bookingId,bookingReference:activeBooking.bookingReference,appointmentDate:f.elements.appointmentDate.value,startTime:f.elements.startTime.value,reasonCode:f.elements.reasonCode.value,reasonDetail:f.elements.reasonDetail.value.trim()};const oldDate=activeBooking.appointmentDate;await apiCall('admin.booking.reschedule',payload);closeDialog('booking-dialog');notifyChanged('booking-changed',oldDate);notifyChanged('booking-changed',payload.appointmentDate);message('dashboard-message','เปลี่ยนนัดสำเร็จ','success');await bestEffortRefresh({bookings:true,detail:true});}}catch(e){message('dashboard-message',errorText(e),'error');}});
+    $('admin-booking-form').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.currentTarget,mode=f.elements.mode.value;try{if(mode==='create'){const payload={appointmentDate:f.elements.appointmentDate.value,startTime:f.elements.startTime.value,firstName:f.elements.firstName.value.trim(),lastName:f.elements.lastName.value.trim(),dob:f.elements.dob.value,phone:f.elements.phone.value.trim(),email:f.elements.email.value.trim(),thaiNationalId:f.elements.thaiNationalId.value.trim(),underlyingDisease:f.elements.underlyingDisease.value.trim()};await apiCall('admin.booking.create',payload);closeDialog('booking-dialog');notifyChanged('booking-changed',payload.appointmentDate);message('dashboard-message','เพิ่มนัดสำเร็จ','success');notifySuccess('เพิ่มนัดสำเร็จ',String(payload.appointmentDate||'')+' · '+String(payload.startTime||''));await bestEffortRefresh({bookings:true,detail:true});}else if(activeBooking){const payload={bookingId:activeBooking.bookingId,bookingReference:activeBooking.bookingReference,appointmentDate:f.elements.appointmentDate.value,startTime:f.elements.startTime.value,reasonCode:f.elements.reasonCode.value,reasonDetail:f.elements.reasonDetail.value.trim()};const oldDate=activeBooking.appointmentDate;await apiCall('admin.booking.reschedule',payload);closeDialog('booking-dialog');notifyChanged('booking-changed',oldDate);notifyChanged('booking-changed',payload.appointmentDate);message('dashboard-message','เปลี่ยนนัดสำเร็จ','success');notifySuccess('เปลี่ยนนัดสำเร็จ',String(activeBooking.bookingReference||'')+' · '+String(payload.appointmentDate||'')+' '+String(payload.startTime||''));await bestEffortRefresh({bookings:true,detail:true});}}catch(e){message('dashboard-message',errorText(e),'error');}});
     $('outcome-completed').onclick=()=>submitOutcome('COMPLETED').catch(e=>message('dashboard-message',errorText(e),'error'));
     $('outcome-no-show').onclick=()=>submitOutcome('NO_SHOW').catch(e=>message('dashboard-message',errorText(e),'error'));
     $('create-user-form').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.currentTarget;try{await apiCall('superadmin.user.create',{staffId:f.elements.staffId.value.trim(),name:f.elements.name.value.trim(),role:f.elements.role.value,password:f.elements.password.value});f.reset();message('dashboard-message','สร้างบัญชีสำเร็จ','success');await loadUsers();}catch(e){message('dashboard-message',errorText(e),'error');}});
