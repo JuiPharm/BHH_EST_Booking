@@ -27,11 +27,19 @@
     const url=validateApiUrl(opts.apiUrl);
     const fetchImpl=opts.fetchImpl||(typeof fetch!=='undefined'?fetch.bind(globalThis):null);
     if(!fetchImpl) throw new ApiError('FETCH_UNAVAILABLE','Browser นี้ไม่รองรับ Fetch API');
+    async function waitForBrowserPaint_(){
+      if(typeof opts.beforeRequest==='function'){ await opts.beforeRequest(); return; }
+      if(typeof requestAnimationFrame==='function'){
+        await new Promise(function(resolve){ requestAnimationFrame(function(){ resolve(); }); });
+      }
+    }
     return {
-      async call(action,payload,token){
+      async call(action,payload,token,callOptions){
         const actionName=String(action||'');
-        if(typeof opts.onStart==='function') opts.onStart(actionName);
+        const silent=!!(callOptions&&callOptions.silent);
+        if(!silent&&typeof opts.onStart==='function') opts.onStart(actionName);
         try{
+          if(!silent) await waitForBrowserPaint_();
           const body={action:actionName,payload:payload||{}};
           if(token) body.token=String(token);
           let response;
@@ -65,7 +73,7 @@
           }
           return envelope.data;
         }finally{
-          if(typeof opts.onEnd==='function') opts.onEnd(actionName);
+          if(!silent&&typeof opts.onEnd==='function') opts.onEnd(actionName);
         }
       }
     };

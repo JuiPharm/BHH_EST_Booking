@@ -2,14 +2,24 @@
   'use strict';
   document.addEventListener('DOMContentLoaded',function(){
     const $=id=>document.getElementById(id);
-    let client;let monthAnchor=ESTUi.todayIso();let calendarData=null;let selectedDate='';let selectedSlot=null;let lastDateButton=null;
+    const SYNC_CHANNEL_NAME='est-booking-sync-v1';
+    const AUTO_REFRESH_MS=10000;
+    let client;
+    let monthAnchor=ESTUi.todayIso();
+    let calendarData=null;
+    let selectedDate='';
+    let selectedSlot=null;
+    let lastDateButton=null;
+    let monthLoading=false;
+    const syncChannel=typeof BroadcastChannel!=='undefined'?new BroadcastChannel(SYNC_CHANNEL_NAME):null;
     const copy={
       NOT_SCHEDULED:'วันที่เลือกยังไม่มีรอบตรวจที่เปิดให้จอง กรุณาเลือกวันที่อื่นที่แสดงว่ามีเวลาว่าง',
       FULL:'รอบตรวจของวันนี้เต็มแล้ว กรุณาเลือกวันที่อื่นเพื่อดูรอบที่ยังมีที่ว่าง',
       TOO_SOON:'ยังไม่สามารถจองรอบของวันที่นี้ได้ ระบบเปิดให้จองล่วงหน้าอย่างน้อย 24 ชั่วโมง',
-      NOT_YET_OPEN:'วันที่นี้ยังไม่อยู่ในช่วงที่เปิดให้จอง สามารถจองล่วงหน้าได้ไม่เกิน 7 วัน',
+      NOT_YET_OPEN:'วันที่นี้ยังไม่อยู่ในช่วงที่เปิดให้จอง สามารถจองล่วงหน้าได้ไม่เกิน 30 วัน',
       PAST:'วันที่นี้ผ่านไปแล้ว กรุณาเลือกวันที่อื่น'
     };
+
     function showMessage(text,type){const e=$('public-message');e.textContent=text||'';e.className='notice '+(type||'');e.classList.toggle('hidden',!text);}
     function errorText(e){return (e&&e.message?e.message:'เกิดข้อผิดพลาด')+(e&&e.requestId?' (Ref: '+e.requestId+')':'');}
     function busy(el,on){if(el){el.disabled=!!on;el.classList.toggle('loading',!!on);}}
@@ -33,12 +43,28 @@
       if(day.status==='NOT_YET_OPEN')return 'ยังไม่เปิดให้จอง';
       return '';
     }
-    async function loadMonth(){
-      if(!client)return;showMessage('','');const range=ESTUi.monthRange(monthAnchor);
+    function displayedRange(){return ESTUi.monthRange(monthAnchor);}
+    function dateIsDisplayed(date){const r=displayedRange();return !date||(date>=r.startDate&&date<=r.endDate);}
+
+    async function loadMonth(options){
+      const opts=options||{};
+      if(!client||monthLoading)return calendarData;
+      monthLoading=true;
+      if(!opts.silent)showMessage('','');
+      const range=displayedRange();
       $('public-month-label').textContent=ESTUi.formatThaiDate(range.startDate,{month:'long',year:'numeric',timeZone:'UTC'});
-      const grid=$('public-month-grid');grid.classList.add('loading');
-      try{calendarData=await client.call('public.calendar',range);renderMonth();}catch(e){showMessage(errorText(e),'error');grid.innerHTML='<div class="empty month-error">ไม่สามารถโหลดปฏิทินได้</div>';}
-      finally{grid.classList.remove('loading');}
+      const grid=$('public-month-grid');if(!opts.silent)grid.classList.add('loading');
+      try{
+        calendarData=await client.call('public.calendar',range,null,{silent:!!opts.silent});
+        renderMonth();
+        return calendarData;
+      }catch(e){
+        if(!opts.silent){showMessage(errorText(e),'error');grid.innerHTML='<div class="empty month-error">ไม่สามารถโหลดปฏิทินได้</div>';}
+        return calendarData;
+      }finally{
+        if(!opts.silent)grid.classList.remove('loading');
+        monthLoading=false;
+      }
     }
     function renderMonth(){
       const grid=$('public-month-grid');grid.innerHTML='';
@@ -58,11 +84,12 @@
       if(!day||day.status!=='AVAILABLE'){showMessage(copy[day&&day.status]||copy.NOT_SCHEDULED,'warning');return;}
       showMessage('','');openSlots(date);
     }
-    async function openSlots(date){
+    async function openSlots(date,options){
+      const opts=options||{};
       selectedDate=date;selectedSlot=null;$('slot-dialog-title').textContent='เลือกเวลาตรวจ · '+ESTUi.formatThaiDate(date);$('slot-list').innerHTML='<div class="empty">กำลังโหลดเวลาว่าง...</div>';
-      const dialog=$('slot-dialog');dialog.showModal();
+      const dialog=$('slot-dialog');if(!dialog.open)dialog.showModal();
       try{
-        const result=await client.call('public.availability',{date:date});$('slot-list').innerHTML='';
+        const result=await client.call('public.availability',{date:date},null,{silent:!!opts.silent});$('slot-list').innerHTML='';
         (result.slots||[]).forEach(slot=>{
           const b=document.createElement('button');b.type='button';b.className='slot';b.disabled=!(slot.available&&Number(slot.remaining)>0);
           b.innerHTML='<strong>'+ESTUi.escapeHtml(slot.startTime)+'</strong><small>'+(b.disabled?'เต็มแล้ว':'เหลือ '+Number(slot.remaining)+' ที่')+'</small>';
@@ -72,17 +99,54 @@
       }catch(e){$('slot-list').innerHTML='<div class="notice error">'+ESTUi.escapeHtml(errorText(e))+'</div>';}
     }
     function chooseSlot(slot){selectedSlot=slot;$('slot-dialog').close();$('selected-slot-summary').textContent='วันตรวจ '+ESTUi.formatThaiDate(selectedDate)+' เวลา '+slot.startTime+'–'+slot.endTime;$('patient-section').classList.remove('hidden');$('patient-section').scrollIntoView({behavior:'smooth',block:'start'});}
-    $('slot-dialog-close').addEventListener('click',()=>$('slot-dialog').close());$('slot-dialog').addEventListener('close',()=>{if(lastDateButton)lastDateButton.focus();});
-    $('month-prev').addEventListener('click',()=>{monthAnchor=ESTUi.shiftMonth(monthAnchor,-1);loadMonth();});$('month-next').addEventListener('click',()=>{monthAnchor=ESTUi.shiftMonth(monthAnchor,1);loadMonth();});
+    $('slot-dialog-close').addEventListener('click',()=>$('slot-dialog').close());
+    $('slot-dialog').addEventListener('close',()=>{if(lastDateButton)lastDateButton.focus();});
+    $('month-prev').addEventListener('click',()=>{monthAnchor=ESTUi.shiftMonth(monthAnchor,-1);loadMonth();});
+    $('month-next').addEventListener('click',()=>{monthAnchor=ESTUi.shiftMonth(monthAnchor,1);loadMonth();});
     $('change-slot').addEventListener('click',()=>{$('patient-section').classList.add('hidden');selectedSlot=null;window.scrollTo({top:0,behavior:'smooth'});});
-    $('patient-form').addEventListener('submit',async event=>{
-      event.preventDefault();if(!selectedDate||!selectedSlot){showMessage('กรุณาเลือกวันและเวลาตรวจก่อน','error');return;}
-      const data=Object.fromEntries(new FormData(event.currentTarget).entries());data.appointmentDate=selectedDate;data.startTime=selectedSlot.startTime;const button=$('submit-booking');busy(button,true);showMessage('','');
-      try{const result=await client.call('public.booking.create',data);const fields=[['Booking Reference',result.bookingReference],['ชื่อผู้รับบริการ',(result.firstName||'')+' '+(result.lastName||'')],['วันที่ตรวจ',result.appointmentDate],['เวลา',result.startTime],['สถานะ',result.status||'CONFIRMED']];$('confirmation-summary').innerHTML=fields.map(x=>'<dt>'+ESTUi.escapeHtml(x[0])+'</dt><dd>'+ESTUi.escapeHtml(x[1]||'')+'</dd>').join('');$('patient-section').classList.add('hidden');$('confirmation-panel').classList.remove('hidden');event.currentTarget.reset();await loadMonth();}
-      catch(e){showMessage(errorText(e),'error');if(e&&e.code==='SLOT_FULL'){await loadMonth();if(selectedDate)openSlots(selectedDate);}}
-      finally{busy(button,false);}
+
+    function notifyBookingViewsChanged(message){
+      if(syncChannel)syncChannel.postMessage(Object.assign({source:'public',at:Date.now()},message||{}));
+    }
+    async function refreshBookingView(options){
+      const opts=options||{};
+      if(document.visibilityState==='hidden'&&!opts.force)return;
+      await loadMonth({silent:opts.silent!==false});
+      const dialog=$('slot-dialog');
+      if(dialog.open&&selectedDate){
+        const day=calendarData&&calendarData.days?calendarData.days[selectedDate]:null;
+        if(day&&day.status==='AVAILABLE')await openSlots(selectedDate,{silent:true});
+        else if(day&&day.status!=='AVAILABLE'){dialog.close();showMessage(copy[day.status]||copy.NOT_SCHEDULED,'warning');}
+      }
+    }
+    if(syncChannel)syncChannel.addEventListener('message',event=>{
+      const msg=event&&event.data||{};
+      if((msg.type==='schedule-changed'||msg.type==='booking-changed')&&dateIsDisplayed(msg.date||msg.startDate||''))refreshBookingView({silent:true,force:true});
     });
-    $('new-booking').addEventListener('click',()=>{$('confirmation-panel').classList.add('hidden');selectedDate='';selectedSlot=null;window.scrollTo({top:0,behavior:'smooth'});});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshBookingView({silent:true,force:true});});
+    window.addEventListener('focus',()=>refreshBookingView({silent:true,force:true}));
+    setInterval(()=>{if(document.visibilityState==='visible')refreshBookingView({silent:true});},AUTO_REFRESH_MS);
+
+    $('patient-form').addEventListener('submit',async event=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      if(!selectedDate||!selectedSlot){showMessage('กรุณาเลือกวันและเวลาตรวจก่อน','error');return;}
+      const data=Object.fromEntries(new FormData(form).entries());data.appointmentDate=selectedDate;data.startTime=selectedSlot.startTime;
+      const button=$('submit-booking');busy(button,true);showMessage('','');
+      try{
+        const result=await client.call('public.booking.create',data);
+        const fields=[['Booking Reference',result.bookingReference],['ชื่อผู้รับบริการ',(result.firstName||'')+' '+(result.lastName||'')],['วันที่ตรวจ',result.appointmentDate],['เวลา',result.startTime],['สถานะ',result.status||'CONFIRMED']];
+        $('confirmation-summary').innerHTML=fields.map(x=>'<dt>'+ESTUi.escapeHtml(x[0])+'</dt><dd>'+ESTUi.escapeHtml(x[1]||'')+'</dd>').join('');
+        $('patient-section').classList.add('hidden');$('confirmation-panel').classList.remove('hidden');
+        form.reset();selectedSlot=null;
+        notifyBookingViewsChanged({type:'booking-changed',date:result.appointmentDate});
+        await loadMonth({silent:true});
+      }catch(e){
+        showMessage(errorText(e),'error');
+        if(e&&e.code==='SLOT_FULL'){await loadMonth({silent:true});if(selectedDate)openSlots(selectedDate);}
+      }finally{busy(button,false);}
+    });
+    $('new-booking').addEventListener('click',()=>{$('confirmation-panel').classList.add('hidden');selectedDate='';selectedSlot=null;loadMonth({silent:true});window.scrollTo({top:0,behavior:'smooth'});});
     loadMonth();
   });
 })();
