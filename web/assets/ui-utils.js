@@ -63,7 +63,7 @@
         const remaining=Number(slot.remaining||0);
         if(remaining<=0) return;
         result.push({
-          eventId:String(event.id||event.eventId||''),
+          eventId:String(event.eventId||''),
           date:target,
           startTime:String(slot.startTime||''),
           endTime:String(slot.endTime||''),
@@ -76,8 +76,29 @@
     result.sort(function(a,b){return a.startTime.localeCompare(b.startTime);});
     return result;
   }
+
+  function publicAvailabilityLabel(day){
+    if(!day)return '';
+    if(day.status==='AVAILABLE'){
+      const capacity=Math.max(0,Number(day.availableCapacity||0));
+      const slots=Math.max(0,Number(day.availableSlotCount||0));
+      return 'เหลือ '+capacity+' ที่ · '+slots+' ช่วงเวลา';
+    }
+    if(day.status==='FULL')return 'รอบเต็มแล้ว';
+    if(day.status==='NOT_SCHEDULED')return 'ยังไม่มีรอบตรวจ';
+    if(day.status==='TOO_SOON')return 'ยังไม่ถึงช่วงจอง';
+    if(day.status==='NOT_YET_OPEN')return 'ยังไม่เปิดให้จอง';
+    return '';
+  }
+  function createLatestRequestGate(){
+    let sequence=0;
+    return {
+      next(){sequence+=1;return sequence;},
+      isLatest(id){return Number(id)===sequence;}
+    };
+  }
   function escapeHtml(value){
     return String(value===null||value===undefined?'':value).replace(/[&<>'"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch];});
   }
-  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,monthRange,shiftMonth,monthGrid,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,escapeHtml};
+  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,monthRange,shiftMonth,monthGrid,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,publicAvailabilityLabel,createLatestRequestGate,escapeHtml};
 });

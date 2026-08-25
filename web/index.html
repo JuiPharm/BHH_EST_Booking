@@ -1,34 +1,35 @@
 <!doctype html>
 <html lang="th">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>จองตรวจ EST Online</title><link rel="icon" href="favicon.ico"><link rel="apple-touch-icon" href="assets/apple-touch-icon.png"><link rel="stylesheet" href="assets/styles.css"></head>
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#006b78"><link rel="icon" href="assets/favicon.ico"><link rel="apple-touch-icon" href="assets/apple-touch-icon.png"><title>EST Online Booking</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
 <body>
-<header class="site-header"><div class="header-inner"><div class="brand-lockup"><img class="brand-logo" src="assets/est-logo.png" alt="Bangkok Hospital Hat Yai"><div class="brand">EST Online Booking<small>ระบบจองตรวจ Exercise Stress Test</small></div></div><a class="btn btn-ghost" href="admin.html">สำหรับเจ้าหน้าที่</a></div></header>
-<div id="global-loading" class="loading-overlay hidden" role="status" aria-live="polite" aria-busy="true"><div class="loading-panel"><div class="loader-spinner" aria-hidden="true"></div><div id="global-loading-text">กำลังดำเนินการ...</div></div></div>
+<header class="site-header"><div class="header-inner"><div class="brand"><img class="brand-logo" src="assets/bhh-logo.jpg" alt="Bangkok Hospital Hat Yai"><span>EST Online Booking<small>ระบบจองตรวจ Exercise Stress Test</small></span></div><a class="btn btn-ghost header-link" href="admin.html">สำหรับเจ้าหน้าที่</a></div></header>
 <main class="container narrow">
   <section class="card">
-    <h1>เลือกวันตรวจ EST</h1>
-    <p class="muted">ดูภาพรวมรอบตรวจจากปฏิทิน แล้วเลือกวันที่ที่สะดวก ระบบเปิดให้จองล่วงหน้าอย่างน้อย 24 ชั่วโมง และไม่เกิน 30 วัน</p>
+    <h1>จองวันและเวลาตรวจ EST</h1>
+    <p class="muted">เปิดจองล่วงหน้าอย่างน้อย 24 ชั่วโมง และไม่เกิน 30 วัน โดยยึดเวลาของระบบโรงพยาบาล</p>
     <div id="public-message" class="notice hidden" role="status" aria-live="polite"></div>
-    <div class="month-toolbar"><button id="month-prev" class="btn btn-ghost" type="button">← เดือนก่อน</button><strong id="public-month-label"></strong><button id="month-next" class="btn btn-ghost" type="button">เดือนถัดไป →</button></div>
-    <div class="calendar-weekdays" aria-hidden="true"><span>จ.</span><span>อ.</span><span>พ.</span><span>พฤ.</span><span>ศ.</span><span>ส.</span><span>อา.</span></div>
-    <div id="public-month-grid" class="month-grid public-month" aria-label="ปฏิทินรอบตรวจ EST"></div>
-    <div class="calendar-legend"><span><i class="legend-dot available"></i>มีเวลาว่าง</span><span><i class="legend-dot full"></i>รอบเต็มแล้ว</span><span><i class="legend-dot muted-dot"></i>ยังไม่มีรอบตรวจ</span></div>
+    <div class="calendar-toolbar"><button id="month-prev" class="btn btn-ghost" type="button">← เดือนก่อน</button><strong id="public-month-label"></strong><button id="month-next" class="btn btn-ghost" type="button">เดือนถัดไป →</button></div>
+    <div class="weekday-row" aria-hidden="true"><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span><span>อา</span></div>
+    <div id="public-month-grid" class="month-grid public-month-grid" aria-label="ปฏิทินวันตรวจ"></div>
   </section>
 
-  <section class="card hidden" id="patient-section">
-    <h2>ข้อมูลผู้รับบริการ</h2>
-    <p id="selected-slot-summary" class="notice"></p>
-    <form id="patient-form" autocomplete="on">
+  <section id="patient-section" class="card hidden">
+    <div class="section-heading"><div><h2>ข้อมูลผู้รับบริการ</h2><p id="selected-slot-summary" class="muted"></p></div><button id="change-slot" class="btn btn-ghost" type="button">เปลี่ยนวัน/เวลา</button></div>
+    <form id="patient-form">
       <div class="grid grid-2">
-        <div class="field"><label for="firstName">ชื่อ</label><input id="firstName" name="firstName" autocomplete="given-name" required></div>
-        <div class="field"><label for="lastName">นามสกุล</label><input id="lastName" name="lastName" autocomplete="family-name" required></div>
-        <div class="field"><label for="dob">วันเดือนปีเกิด</label><input type="date" id="dob" name="dob" required></div>
-        <div class="field"><label for="phone">เบอร์โทรศัพท์</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" required></div>
-        <div class="field"><label for="email">Email</label><input type="email" id="email" name="email" autocomplete="email" required></div>
-        <div class="field"><label for="thaiNationalId">เลขบัตรประชาชน 13 หลัก</label><input id="thaiNationalId" name="thaiNationalId" inputmode="numeric" autocomplete="off" required maxlength="20"></div>
+        <div class="field"><label for="firstName">ชื่อ</label><input id="firstName" name="firstName" required maxlength="120"></div>
+        <div class="field"><label for="lastName">นามสกุล</label><input id="lastName" name="lastName" required maxlength="120"></div>
+        <div class="field"><label for="dob">วันเกิด</label><input id="dob" type="date" name="dob" required></div>
+        <div class="field"><label for="phone">เบอร์โทร</label><input id="phone" name="phone" inputmode="tel" required></div>
+        <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required></div>
+        <div class="field"><label for="thaiNationalId">เลขบัตรประชาชน</label><input id="thaiNationalId" name="thaiNationalId" inputmode="numeric" autocomplete="off" required minlength="13" maxlength="13"></div>
       </div>
-      <div class="field" style="margin-top:16px"><label for="underlyingDisease">โรคประจำตัว</label><textarea id="underlyingDisease" name="underlyingDisease" required placeholder="หากไม่มี กรุณาระบุว่า ไม่มี"></textarea></div>
-      <div class="actions"><button class="btn btn-primary" id="submit-booking" type="submit">ยืนยันการจอง</button><button class="btn btn-ghost" id="change-slot" type="button">เปลี่ยนวัน/เวลา</button></div>
+      <div class="field field-wide"><label for="underlyingDisease">โรคประจำตัว</label><textarea id="underlyingDisease" name="underlyingDisease" required placeholder="หากไม่มี กรุณาระบุว่า ไม่มี"></textarea></div>
+      <div class="actions"><button class="btn btn-primary" id="submit-booking" type="submit">ยืนยันการจอง</button></div>
     </form>
   </section>
 
@@ -40,6 +41,7 @@
   </section>
   <p class="footer-note">ข้อมูลส่วนบุคคลจะถูกส่งไปยังระบบของโรงพยาบาลเพื่อจัดการนัดตรวจ EST เท่านั้น</p>
 </main>
-<dialog id="slot-dialog" aria-labelledby="slot-dialog-title"><div class="dialog-body"><div class="dialog-header"><h2 id="slot-dialog-title">เลือกเวลาตรวจ</h2><button id="slot-dialog-close" class="icon-btn" type="button" aria-label="ปิด">×</button></div><div id="slot-dialog-message" class="notice hidden" role="status"></div><div id="slot-list" class="slot-list" aria-live="polite"></div></div></dialog>
+<dialog id="slot-dialog" aria-labelledby="slot-dialog-title"><div class="dialog-body"><div class="dialog-header"><h2 id="slot-dialog-title">เลือกเวลาตรวจ</h2><button id="slot-dialog-close" class="icon-btn" type="button" aria-label="ปิด">×</button></div><div id="slot-list" class="slot-list"></div></div></dialog>
+<div id="global-loading" class="loading-overlay hidden" role="status" aria-live="polite" aria-busy="true"><div class="loading-card"><span class="spinner" aria-hidden="true"></span><strong id="global-loading-text">กำลังดำเนินการ...</strong></div></div>
 <script src="config.js"></script><script src="assets/api.js"></script><script src="assets/ui-utils.js"></script><script src="assets/public.js"></script>
 </body></html>

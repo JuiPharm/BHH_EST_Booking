@@ -1,93 +1,45 @@
 (function(root,factory){
   const api=factory();
-  if(typeof module!=='undefined'&&module.exports) module.exports=api;
-  if(root) root.ESTApi=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+  if(root)root.ESTApi=api;
 })(typeof window!=='undefined'?window:null,function(){
-  class ApiError extends Error{
-    constructor(code,message,details,requestId){
-      super(message||'เกิดข้อผิดพลาดในการเชื่อมต่อระบบ');
-      this.name='ApiError';
-      this.code=code||'API_ERROR';
-      this.details=details;
-      this.requestId=requestId||'';
-    }
+  'use strict';
+  function ApiError(message,code,requestId,details,status){
+    const e=new Error(String(message||'เกิดข้อผิดพลาด'));
+    e.name='ApiError';e.code=String(code||'API_ERROR');e.requestId=String(requestId||'');e.details=details;e.status=Number(status||0);return e;
   }
-
-  function validateApiUrl(apiUrl){
-    const url=String(apiUrl||'').trim();
-    if(!url||/YOUR_APPS_SCRIPT|CHANGE_ME/i.test(url)){
-      throw new ApiError('API_NOT_CONFIGURED','ยังไม่ได้กำหนด Apps Script Web App URL ใน web/config.js');
-    }
-    if(!/^https:\/\//i.test(url)) throw new ApiError('API_URL_INVALID','API URL ต้องใช้ HTTPS');
-    return url;
+  function nextPaint(){
+    return new Promise(resolve=>{
+      if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>resolve());
+      else setTimeout(resolve,0);
+    });
   }
-
   function createApiClient(options){
     const opts=options||{};
-    const url=validateApiUrl(opts.apiUrl);
-    const fetchImpl=opts.fetchImpl||(typeof fetch!=='undefined'?fetch.bind(globalThis):null);
-    if(!fetchImpl) throw new ApiError('FETCH_UNAVAILABLE','Browser นี้ไม่รองรับ Fetch API');
-    async function waitForBrowserPaint_(){
-      if(typeof opts.beforeRequest==='function'){ await opts.beforeRequest(); return; }
-      if(typeof requestAnimationFrame==='function'){
-        await new Promise(function(resolve){ requestAnimationFrame(function(){ resolve(); }); });
+    const apiUrl=String(opts.apiUrl||'').trim();
+    if(!/^https:\/\//.test(apiUrl))throw new Error('EST API URL is not configured.');
+    const fetchImpl=opts.fetchImpl||(typeof fetch==='function'?fetch.bind(globalThis):null);
+    if(!fetchImpl)throw new Error('Fetch API is unavailable.');
+    async function call(action,payload,token,callOptions){
+      const c=callOptions||{};
+      if(!c.silent&&typeof opts.onStart==='function'){opts.onStart(action);await nextPaint();}
+      try{
+        let response;
+        try{
+          response=await fetchImpl(apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:String(action||''),payload:payload||{},token:String(token||'')})});
+        }catch(networkError){throw ApiError('ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่','NETWORK_ERROR','',null,0);}
+        let envelope;
+        try{envelope=await response.json();}catch(parseError){throw ApiError('รูปแบบข้อมูลตอบกลับไม่ถูกต้อง','INVALID_RESPONSE','',null,response.status);}
+        if(!response.ok||!envelope||envelope.ok!==true){
+          const err=envelope&&envelope.error||{};
+          throw ApiError(err.message||('HTTP '+response.status),err.code||'API_ERROR',envelope&&envelope.requestId,err.details,response.status);
+        }
+        return envelope.data;
+      }finally{
+        if(!c.silent&&typeof opts.onEnd==='function')opts.onEnd(action);
       }
     }
-    return {
-      async call(action,payload,token,callOptions){
-        const actionName=String(action||'');
-        const silent=!!(callOptions&&callOptions.silent);
-        if(!silent&&typeof opts.onStart==='function') opts.onStart(actionName);
-        try{
-          if(!silent) await waitForBrowserPaint_();
-          const body={action:actionName,payload:payload||{}};
-          if(token) body.token=String(token);
-          let response;
-          try{
-            response=await fetchImpl(url,{
-              method:'POST',
-              headers:{'Content-Type':'text/plain;charset=utf-8'},
-              body:JSON.stringify(body),
-              redirect:'follow',
-              credentials:'omit'
-            });
-          }catch(error){
-            throw new ApiError('NETWORK_ERROR','ไม่สามารถเชื่อมต่อระบบได้ กรุณาตรวจสอบเครือข่าย',null,'');
-          }
-          let envelope;
-          try{
-            if(response&&typeof response.text==='function'){
-              const text=await response.text();
-              envelope=JSON.parse(text);
-            }else if(response&&typeof response.json==='function'){
-              envelope=await response.json();
-            }else{
-              throw new Error('No response reader');
-            }
-          }catch(error){
-            throw new ApiError('INVALID_API_RESPONSE','ระบบตอบกลับในรูปแบบที่ไม่ถูกต้อง',null,'');
-          }
-          if(!envelope||envelope.ok!==true){
-            const err=envelope&&envelope.error?envelope.error:{};
-            throw new ApiError(err.code||'API_ERROR',err.message||'เกิดข้อผิดพลาดจากระบบ',err.details,envelope&&envelope.requestId);
-          }
-          return envelope.data;
-        }finally{
-          if(!silent&&typeof opts.onEnd==='function') opts.onEnd(actionName);
-        }
-      }
-    };
+    return {call};
   }
-
-  function createSessionStore(storage,key){
-    const backing=storage||(typeof sessionStorage!=='undefined'?sessionStorage:null);
-    const storageKey=String(key||'est-admin-session');
-    return {
-      get(){return backing?backing.getItem(storageKey):null;},
-      set(token){if(backing) backing.setItem(storageKey,String(token||''));},
-      clear(){if(backing) backing.removeItem(storageKey);}
-    };
-  }
-
-  return {ApiError,validateApiUrl,createApiClient,createSessionStore};
+  return {ApiError,createApiClient};
 });

@@ -11,6 +11,8 @@
     let selectedSlot=null;
     let lastDateButton=null;
     let monthLoading=false;
+    let activeMonthLoad=null;
+    const monthRequestGate=ESTUi.createLatestRequestGate();
     const syncChannel=typeof BroadcastChannel!=='undefined'?new BroadcastChannel(SYNC_CHANNEL_NAME):null;
     const copy={
       NOT_SCHEDULED:'วันที่เลือกยังไม่มีรอบตรวจที่เปิดให้จอง กรุณาเลือกวันที่อื่นที่แสดงว่ามีเวลาว่าง',
@@ -34,37 +36,40 @@
     function endLoading(){loadingDepth=Math.max(0,loadingDepth-1);if(!loadingDepth)$('global-loading').classList.add('hidden');}
     try{client=ESTApi.createApiClient({apiUrl:window.EST_CONFIG&&window.EST_CONFIG.API_URL,onStart:beginLoading,onEnd:endLoading});}catch(e){showMessage(errorText(e),'error');}
 
-    function statusLabel(day){
-      if(!day)return '';
-      if(day.status==='AVAILABLE')return 'ว่าง '+Number(day.availableSlotCount||0)+' รอบ';
-      if(day.status==='FULL')return 'รอบเต็มแล้ว';
-      if(day.status==='NOT_SCHEDULED')return 'ยังไม่มีรอบตรวจ';
-      if(day.status==='TOO_SOON')return 'ยังไม่ถึงช่วงจอง';
-      if(day.status==='NOT_YET_OPEN')return 'ยังไม่เปิดให้จอง';
-      return '';
-    }
+    function statusLabel(day){return ESTUi.publicAvailabilityLabel(day);}
     function displayedRange(){return ESTUi.monthRange(monthAnchor);}
     function dateIsDisplayed(date){const r=displayedRange();return !date||(date>=r.startDate&&date<=r.endDate);}
 
-    async function loadMonth(options){
-      const opts=options||{};
-      if(!client||monthLoading)return calendarData;
-      monthLoading=true;
+    async function performMonthLoad(opts,requestId){
       if(!opts.silent)showMessage('','');
       const range=displayedRange();
       $('public-month-label').textContent=ESTUi.formatThaiDate(range.startDate,{month:'long',year:'numeric',timeZone:'UTC'});
       const grid=$('public-month-grid');if(!opts.silent)grid.classList.add('loading');
       try{
-        calendarData=await client.call('public.calendar',range,null,{silent:!!opts.silent});
+        const result=await client.call('public.calendar',range,null,{silent:!!opts.silent});
+        if(!monthRequestGate.isLatest(requestId))return calendarData;
+        calendarData=result;
         renderMonth();
         return calendarData;
       }catch(e){
-        if(!opts.silent){showMessage(errorText(e),'error');grid.innerHTML='<div class="empty month-error">ไม่สามารถโหลดปฏิทินได้</div>';}
+        if(monthRequestGate.isLatest(requestId)&&!opts.silent){showMessage(errorText(e),'error');grid.innerHTML='<div class="empty month-error">ไม่สามารถโหลดปฏิทินได้</div>';}
         return calendarData;
       }finally{
-        if(!opts.silent)grid.classList.remove('loading');
-        monthLoading=false;
+        if(monthRequestGate.isLatest(requestId)){
+          if(!opts.silent)grid.classList.remove('loading');
+          monthLoading=false;
+          activeMonthLoad=null;
+        }
       }
+    }
+    function loadMonth(options){
+      const opts=options||{};
+      if(!client)return Promise.resolve(calendarData);
+      if(monthLoading&&!opts.force)return activeMonthLoad||Promise.resolve(calendarData);
+      const requestId=monthRequestGate.next();
+      monthLoading=true;
+      activeMonthLoad=performMonthLoad(opts,requestId);
+      return activeMonthLoad;
     }
     function renderMonth(){
       const grid=$('public-month-grid');grid.innerHTML='';
@@ -111,7 +116,7 @@
     async function refreshBookingView(options){
       const opts=options||{};
       if(document.visibilityState==='hidden'&&!opts.force)return;
-      await loadMonth({silent:opts.silent!==false});
+      await loadMonth({silent:opts.silent!==false,force:!!opts.force});
       const dialog=$('slot-dialog');
       if(dialog.open&&selectedDate){
         const day=calendarData&&calendarData.days?calendarData.days[selectedDate]:null;
@@ -140,13 +145,13 @@
         $('patient-section').classList.add('hidden');$('confirmation-panel').classList.remove('hidden');
         form.reset();selectedSlot=null;
         notifyBookingViewsChanged({type:'booking-changed',date:result.appointmentDate});
-        await loadMonth({silent:true});
+        await loadMonth({silent:true,force:true});
       }catch(e){
         showMessage(errorText(e),'error');
-        if(e&&e.code==='SLOT_FULL'){await loadMonth({silent:true});if(selectedDate)openSlots(selectedDate);}
+        if(e&&e.code==='SLOT_FULL'){await loadMonth({silent:true,force:true});if(selectedDate)openSlots(selectedDate);}
       }finally{busy(button,false);}
     });
-    $('new-booking').addEventListener('click',()=>{$('confirmation-panel').classList.add('hidden');selectedDate='';selectedSlot=null;loadMonth({silent:true});window.scrollTo({top:0,behavior:'smooth'});});
+    $('new-booking').addEventListener('click',()=>{$('confirmation-panel').classList.add('hidden');selectedDate='';selectedSlot=null;loadMonth({silent:true,force:true});window.scrollTo({top:0,behavior:'smooth'});});
     loadMonth();
   });
 })();
