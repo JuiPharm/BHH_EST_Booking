@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="th">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>จองตรวจ EST Online</title><link rel="stylesheet" href="assets/styles.css"></head>
+<body>
+<header class="site-header"><div class="header-inner"><div class="brand">EST Online Booking<small>ระบบจองตรวจ Exercise Stress Test</small></div><a class="btn btn-ghost" href="admin.html">สำหรับเจ้าหน้าที่</a></div></header>
+<main class="container narrow">
+  <section class="card">
+    <h1>จองวันและเวลาตรวจ EST</h1>
+    <p class="muted">เปิดจองล่วงหน้าอย่างน้อย 24 ชั่วโมง และไม่เกิน 7 วัน ระบบจะแสดงเฉพาะเวลาที่มีที่ว่าง</p>
+    <div id="public-message" class="notice hidden" role="status"></div>
+    <div class="grid grid-2">
+      <div class="field"><label for="booking-date">วันที่ต้องการตรวจ</label><input type="date" id="booking-date" required></div>
+      <div class="field"><label>&nbsp;</label><button class="btn btn-primary" id="load-slots" type="button">ดูเวลาว่าง</button></div>
+    </div>
+    <div id="slot-list" class="slot-list" aria-live="polite"></div>
+  </section>
+
+  <section class="card hidden" id="patient-section">
+    <h2>ข้อมูลผู้รับบริการ</h2>
+    <p id="selected-slot-summary" class="notice"></p>
+    <form id="patient-form" autocomplete="on">
+      <div class="grid grid-2">
+        <div class="field"><label for="firstName">ชื่อ</label><input id="firstName" name="firstName" autocomplete="given-name" required></div>
+        <div class="field"><label for="lastName">นามสกุล</label><input id="lastName" name="lastName" autocomplete="family-name" required></div>
+        <div class="field"><label for="dob">วันเดือนปีเกิด</label><input type="date" id="dob" name="dob" required></div>
+        <div class="field"><label for="phone">เบอร์โทรศัพท์</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" required></div>
+        <div class="field"><label for="email">Email</label><input type="email" id="email" name="email" autocomplete="email" required></div>
+        <div class="field"><label for="thaiNationalId">เลขบัตรประชาชน 13 หลัก</label><input id="thaiNationalId" name="thaiNationalId" inputmode="numeric" autocomplete="off" required maxlength="20"></div>
+      </div>
+      <div class="field" style="margin-top:16px"><label for="underlyingDisease">โรคประจำตัว</label><textarea id="underlyingDisease" name="underlyingDisease" required placeholder="หากไม่มี กรุณาระบุว่า ไม่มี"></textarea></div>
+      <div class="actions"><button class="btn btn-primary" id="submit-booking" type="submit">ยืนยันการจอง</button></div>
+    </form>
+  </section>
+
+  <section class="card hidden" id="confirmation-panel" aria-live="polite">
+    <h2>จองสำเร็จ</h2>
+    <div class="notice success">ระบบบันทึกนัดของท่านแล้ว กรุณาเก็บ Booking Reference ไว้</div>
+    <dl class="summary-list" id="confirmation-summary"></dl>
+    <p><strong>กรณีต้องการยกเลิกหรือเปลี่ยนนัด กรุณาโทรติดต่อโรงพยาบาล</strong></p>
+    <div class="actions"><button class="btn" id="new-booking" type="button">กลับหน้าจอง</button></div>
+  </section>
+  <p class="footer-note">ข้อมูลส่วนบุคคลจะถูกส่งไปยังระบบของโรงพยาบาลเพื่อจัดการนัดตรวจ EST เท่านั้น</p>
+</main>
+<script src="config.js"></script><script src="assets/api.js"></script><script src="assets/ui-utils.js"></script><script src="assets/public.js"></script>
+</body></html>

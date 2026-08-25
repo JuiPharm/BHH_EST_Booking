@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="th">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EST Admin Dashboard</title><link rel="stylesheet" href="assets/styles.css"></head>
+<body>
+<header class="site-header"><div class="header-inner"><div class="brand">EST Admin Dashboard<small>จัดการตารางตรวจและนัดหมาย</small></div><a class="btn btn-ghost" href="index.html">หน้าจองผู้รับบริการ</a></div></header>
+<main class="container">
+  <section id="login-panel" class="card login-wrap">
+    <h1>เข้าสู่ระบบเจ้าหน้าที่</h1><p class="muted">ใช้ StaffID และ Password ที่ได้รับจากผู้ดูแลระบบ</p>
+    <div id="admin-message" class="notice hidden" role="status"></div>
+    <form id="login-form">
+      <div class="field"><label for="login-staff-id">StaffID</label><input id="login-staff-id" autocomplete="username" required></div>
+      <div class="field" style="margin-top:14px"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required></div>
+      <div class="actions"><button id="login-button" class="btn btn-primary" type="submit">เข้าสู่ระบบ</button></div>
+    </form>
+  </section>
+
+  <section id="dashboard" class="hidden">
+    <div class="dashboard-header"><div><h1 style="margin:0">จัดการ EST Booking</h1><div id="user-chip" class="user-chip"></div></div><button id="logout-button" class="btn btn-ghost">ออกจากระบบ</button></div>
+    <div id="dashboard-message" class="notice hidden" role="status"></div>
+    <nav class="tabs" aria-label="เมนูจัดการ">
+      <button class="tab active" data-tab="calendar" type="button">Calendar</button>
+      <button class="tab" data-tab="bookings" type="button">Bookings</button>
+      <button class="tab" data-tab="users" type="button" id="users-tab">Users</button>
+    </nav>
+
+    <section id="calendar-panel" class="tab-panel">
+      <div class="card">
+        <div class="toolbar"><div class="toolbar-group"><button id="week-prev" class="btn btn-ghost">← ก่อนหน้า</button><button id="week-today" class="btn">สัปดาห์นี้</button><button id="week-next" class="btn btn-ghost">ถัดไป →</button><strong id="week-label"></strong></div><button id="add-schedule" class="btn btn-primary">+ เปิดห้องตรวจ</button></div>
+        <div id="week-grid" class="week-grid"></div>
+      </div>
+    </section>
+
+    <section id="bookings-panel" class="tab-panel hidden">
+      <div class="card">
+        <div class="toolbar"><div class="toolbar-group">
+          <div class="field"><label for="booking-filter-date">วันที่</label><input type="date" id="booking-filter-date"></div>
+          <div class="field"><label for="booking-filter-status">Status</label><select id="booking-filter-status"><option value="">ทั้งหมด</option><option>CONFIRMED</option><option>RESCHEDULED</option><option>CANCELLED</option><option>COMPLETED</option><option>NO_SHOW</option></select></div>
+          <div class="field"><label for="booking-filter-query">ค้นหา</label><input id="booking-filter-query" placeholder="ชื่อ / เบอร์ / Booking Ref"></div>
+          <button id="booking-search" class="btn" type="button">ค้นหา</button>
+        </div><button id="add-booking" class="btn btn-primary">+ เพิ่มนัด</button></div>
+        <div class="table-wrap"><table><thead><tr><th>วัน/เวลา</th><th>Booking Ref</th><th>ผู้รับบริการ</th><th>ติดต่อ</th><th>Status</th><th>การจัดการ</th></tr></thead><tbody id="booking-table-body"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="users-panel" class="tab-panel hidden">
+      <div class="grid grid-2">
+        <div class="card"><h2>เพิ่มผู้ใช้งาน</h2><form id="create-user-form"><div class="field"><label>StaffID</label><input name="staffId" required></div><div class="field"><label>ชื่อ</label><input name="name" required></div><div class="field"><label>Role</label><select name="role"><option>ADMIN</option><option>SUPER_ADMIN</option></select></div><div class="field"><label>Temporary Password</label><input name="password" type="password" minlength="12" required></div><div class="actions"><button class="btn btn-primary" type="submit">สร้างบัญชี</button></div></form></div>
+        <div class="card"><h2>บัญชีเจ้าหน้าที่</h2><div class="table-wrap"><table><thead><tr><th>StaffID</th><th>ชื่อ</th><th>Role</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="users-table-body"></tbody></table></div></div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<dialog id="schedule-dialog"><div class="dialog-body"><div class="dialog-header"><h2 id="schedule-dialog-title">เปิดห้องตรวจ</h2><button class="icon-btn" data-close-dialog="schedule-dialog" aria-label="ปิด">×</button></div><form id="schedule-form"><input type="hidden" name="eventId"><div class="grid grid-2"><div class="field"><label>วันที่</label><input type="date" name="date" required></div><div class="field"><label>จำนวนห้อง</label><select name="rooms"><option value="1">1 ห้อง</option><option value="2">2 ห้อง</option><option value="3">3 ห้อง</option></select></div><div class="field"><label>เริ่ม</label><input type="time" step="1800" name="startTime" required></div><div class="field"><label>สิ้นสุด</label><input type="time" step="1800" name="endTime" required></div></div><div class="actions"><button class="btn btn-primary" type="submit">บันทึก</button><button class="btn btn-ghost" type="button" data-close-dialog="schedule-dialog">ยกเลิก</button><button id="delete-schedule" class="btn btn-danger hidden" type="button">ลบช่วงตรวจ</button></div></form></div></dialog>
+
+<dialog id="booking-dialog"><div class="dialog-body"><div class="dialog-header"><h2 id="booking-dialog-title">เพิ่มนัด</h2><button class="icon-btn" data-close-dialog="booking-dialog" aria-label="ปิด">×</button></div><form id="admin-booking-form"><input type="hidden" name="bookingId"><div class="grid grid-2"><div class="field"><label>วันที่ตรวจ</label><input type="date" name="appointmentDate" required></div><div class="field"><label>เวลา</label><select name="startTime" required><option value="">เลือกวันที่ก่อน</option></select></div></div><div id="admin-patient-fields"><div class="grid grid-2" style="margin-top:14px"><div class="field"><label>ชื่อ</label><input name="firstName"></div><div class="field"><label>นามสกุล</label><input name="lastName"></div><div class="field"><label>วันเกิด</label><input type="date" name="dob"></div><div class="field"><label>เบอร์โทร</label><input name="phone"></div><div class="field"><label>Email</label><input type="email" name="email"></div><div class="field"><label>เลขบัตรประชาชน</label><input name="thaiNationalId" inputmode="numeric" autocomplete="off"></div></div><div class="field" style="margin-top:14px"><label>โรคประจำตัว</label><textarea name="underlyingDisease"></textarea></div></div><div id="reschedule-reason-fields" class="hidden" style="margin-top:14px"><div class="field"><label>เหตุผลการเลื่อนนัด</label><select name="reasonCode"></select></div><div class="field"><label>รายละเอียด</label><textarea name="reasonDetail"></textarea></div></div><div class="actions"><button class="btn btn-primary" type="submit">บันทึกนัด</button><button class="btn btn-ghost" type="button" data-close-dialog="booking-dialog">ยกเลิก</button></div></form></div></dialog>
+
+<dialog id="reason-dialog"><div class="dialog-body"><div class="dialog-header"><h2 id="reason-dialog-title">ยืนยันการเปลี่ยนแปลง</h2><button class="icon-btn" data-close-dialog="reason-dialog" aria-label="ปิด">×</button></div><div id="impact-summary" class="notice warning"></div><div id="impact-details" class="impact-list"></div><div class="field" style="margin-top:14px"><label for="reason-code">เหตุผล</label><select id="reason-code"></select></div><div class="field" style="margin-top:10px"><label for="reason-detail">รายละเอียด</label><textarea id="reason-detail"></textarea></div><div class="actions"><button id="reason-confirm" class="btn btn-danger" type="button">ยืนยันดำเนินการ</button><button class="btn btn-ghost" type="button" data-close-dialog="reason-dialog">ยกเลิก</button></div></div></dialog>
+
+<dialog id="password-dialog"><div class="dialog-body"><div class="dialog-header"><h2 id="password-dialog-title">เปลี่ยน Password</h2><button class="icon-btn" id="password-close" data-close-dialog="password-dialog" aria-label="ปิด">×</button></div><form id="password-form"><input type="hidden" name="targetStaffId"><div class="field" id="current-password-field"><label>รหัสผ่านปัจจุบัน</label><input type="password" name="currentPassword" autocomplete="current-password"></div><div class="field" style="margin-top:12px"><label>รหัสผ่านใหม่</label><input type="password" name="newPassword" minlength="12" autocomplete="new-password" required></div><div class="actions"><button class="btn btn-primary" type="submit">บันทึก Password</button><button class="btn btn-ghost" type="button" data-close-dialog="password-dialog">ยกเลิก</button></div></form></div></dialog>
+
+<script src="config.js"></script><script src="assets/api.js"></script><script src="assets/ui-utils.js"></script><script src="assets/admin.js"></script>
+</body></html>
