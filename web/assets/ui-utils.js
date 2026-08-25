@@ -17,6 +17,27 @@
     date.setUTCDate(date.getUTCDate()+Number(days||0));
     return toIsoDateUTC(date);
   }
+  function monthRange(value){
+    const date=parseIsoDateUTC(value);
+    const y=date.getUTCFullYear(),m=date.getUTCMonth();
+    const start=new Date(Date.UTC(y,m,1));
+    const end=new Date(Date.UTC(y,m+1,0));
+    return {startDate:toIsoDateUTC(start),endDate:toIsoDateUTC(end)};
+  }
+  function shiftMonth(value,delta){
+    const date=parseIsoDateUTC(value);
+    date.setUTCDate(1);
+    date.setUTCMonth(date.getUTCMonth()+Number(delta||0));
+    return toIsoDateUTC(date);
+  }
+  function monthGrid(value){
+    const range=monthRange(value);
+    const first=parseIsoDateUTC(range.startDate);
+    const day=first.getUTCDay();
+    const mondayOffset=day===0?-6:1-day;
+    const gridStart=shiftIsoDate(range.startDate,mondayOffset);
+    return Array.from({length:42},function(_,i){const date=shiftIsoDate(gridStart,i);return {date:date,inMonth:date>=range.startDate&&date<=range.endDate};});
+  }
   function weekRangeMonday(value){
     const date=parseIsoDateUTC(value);
     const day=date.getUTCDay();
@@ -58,5 +79,5 @@
   function escapeHtml(value){
     return String(value===null||value===undefined?'':value).replace(/[&<>'"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch];});
   }
-  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,escapeHtml};
+  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,monthRange,shiftMonth,monthGrid,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,escapeHtml};
 });

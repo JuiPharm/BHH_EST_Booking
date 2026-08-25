@@ -29,38 +29,44 @@
     if(!fetchImpl) throw new ApiError('FETCH_UNAVAILABLE','Browser นี้ไม่รองรับ Fetch API');
     return {
       async call(action,payload,token){
-        const body={action:String(action||''),payload:payload||{}};
-        if(token) body.token=String(token);
-        let response;
+        const actionName=String(action||'');
+        if(typeof opts.onStart==='function') opts.onStart(actionName);
         try{
-          response=await fetchImpl(url,{
-            method:'POST',
-            headers:{'Content-Type':'text/plain;charset=utf-8'},
-            body:JSON.stringify(body),
-            redirect:'follow',
-            credentials:'omit'
-          });
-        }catch(error){
-          throw new ApiError('NETWORK_ERROR','ไม่สามารถเชื่อมต่อระบบได้ กรุณาตรวจสอบเครือข่าย',null,'');
-        }
-        let envelope;
-        try{
-          if(response&&typeof response.text==='function'){
-            const text=await response.text();
-            envelope=JSON.parse(text);
-          }else if(response&&typeof response.json==='function'){
-            envelope=await response.json();
-          }else{
-            throw new Error('No response reader');
+          const body={action:actionName,payload:payload||{}};
+          if(token) body.token=String(token);
+          let response;
+          try{
+            response=await fetchImpl(url,{
+              method:'POST',
+              headers:{'Content-Type':'text/plain;charset=utf-8'},
+              body:JSON.stringify(body),
+              redirect:'follow',
+              credentials:'omit'
+            });
+          }catch(error){
+            throw new ApiError('NETWORK_ERROR','ไม่สามารถเชื่อมต่อระบบได้ กรุณาตรวจสอบเครือข่าย',null,'');
           }
-        }catch(error){
-          throw new ApiError('INVALID_API_RESPONSE','ระบบตอบกลับในรูปแบบที่ไม่ถูกต้อง',null,'');
+          let envelope;
+          try{
+            if(response&&typeof response.text==='function'){
+              const text=await response.text();
+              envelope=JSON.parse(text);
+            }else if(response&&typeof response.json==='function'){
+              envelope=await response.json();
+            }else{
+              throw new Error('No response reader');
+            }
+          }catch(error){
+            throw new ApiError('INVALID_API_RESPONSE','ระบบตอบกลับในรูปแบบที่ไม่ถูกต้อง',null,'');
+          }
+          if(!envelope||envelope.ok!==true){
+            const err=envelope&&envelope.error?envelope.error:{};
+            throw new ApiError(err.code||'API_ERROR',err.message||'เกิดข้อผิดพลาดจากระบบ',err.details,envelope&&envelope.requestId);
+          }
+          return envelope.data;
+        }finally{
+          if(typeof opts.onEnd==='function') opts.onEnd(actionName);
         }
-        if(!envelope||envelope.ok!==true){
-          const err=envelope&&envelope.error?envelope.error:{};
-          throw new ApiError(err.code||'API_ERROR',err.message||'เกิดข้อผิดพลาดจากระบบ',err.details,envelope&&envelope.requestId);
-        }
-        return envelope.data;
       }
     };
   }
