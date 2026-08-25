@@ -27,7 +27,9 @@
     function bookingErrorText(e){
       const code=String(e&&e.code||'').toUpperCase();
       const messages={
-        INVALID_THAI_ID:'เลขบัตรประชาชนไม่ถูกต้อง กรุณาตรวจสอบเลข 13 หลักอีกครั้ง',
+        INVALID_THAI_ID:'เลขบัตรประชาชนไม่ผ่านการตรวจสอบ กรุณาตรวจเลขทั้ง 13 หลักอีกครั้ง',
+        INVALID_THAI_ID_LENGTH:'เลขบัตรประชาชนต้องมีตัวเลขครบ 13 หลัก (สามารถพิมพ์มีขีดได้)',
+        INVALID_THAI_ID_CHECKSUM:'เลขบัตรประชาชนมี 13 หลักแล้ว แต่เลขหลักตรวจสอบไม่สัมพันธ์กับ 12 หลักแรก กรุณาตรวจสอบเลขจากบัตรอีกครั้ง',
         SECURITY_NOT_INITIALIZED:'ระบบยังไม่พร้อมรับการจอง กรุณาให้ผู้ดูแลระบบรัน setupSystem() ใน Apps Script ก่อนใช้งาน',
         SYSTEM_NOT_INITIALIZED:'โครงสร้างระบบยังไม่พร้อม กรุณาให้ผู้ดูแลระบบรัน setupSystem() ก่อนใช้งาน',
         CALENDAR_NOT_CONFIGURED:'ระบบยังไม่ได้ตั้งค่า Calendar สำหรับ EST กรุณาติดต่อผู้ดูแลระบบ',
@@ -42,6 +44,24 @@
       return messages[code]||String(e&&e.message||'เกิดข้อผิดพลาด');
     }
     function busy(el,on){if(el){el.disabled=!!on;el.classList.toggle('loading',!!on);}}
+    function bindThaiNationalIdInput(){
+      const idInput=$('thaiNationalId'),help=$('thaiNationalIdHelp');
+      if(!idInput||!help)return;
+      const defaultText='กรอกเลข 13 หลักจากบัตร ระบบรองรับตัวเลขไทย/อังกฤษและการพิมพ์มีขีด';
+      function render(){
+        const normalized=ESTUi.normalizeThaiNationalId(idInput.value);
+        if(idInput.value!==normalized)idInput.value=normalized;
+        const check=ESTUi.validateThaiNationalId(normalized);
+        help.dataset.state='';
+        if(!normalized){help.textContent=defaultText;return;}
+        if(check.reason==='LENGTH'){help.textContent=normalized.length<13?'กรอกแล้ว '+normalized.length+'/13 หลัก':'กรอกเกิน 13 หลัก กรุณาตรวจเลขจากบัตรอีกครั้ง';help.dataset.state=normalized.length>13?'invalid':'';return;}
+        if(check.valid){help.textContent='เลขบัตรประชาชนครบ 13 หลักและผ่านการตรวจสอบ';help.dataset.state='valid';return;}
+        help.textContent='ครบ 13 หลัก แต่เลขหลักตรวจสอบไม่ตรง กรุณาตรวจเลขจากบัตรอีกครั้ง';help.dataset.state='invalid';
+      }
+      idInput.addEventListener('input',render);
+      idInput.form&&idInput.form.addEventListener('reset',function(){setTimeout(function(){help.textContent=defaultText;help.dataset.state='';},0);});
+      render();
+    }
     let loadingDepth=0;
     function loadingText(action){
       if(action==='public.calendar')return 'กำลังโหลดปฏิทิน...';
@@ -156,14 +176,21 @@
     window.addEventListener('focus',()=>refreshBookingView({silent:true,force:true}));
     setInterval(()=>{if(document.visibilityState==='visible')refreshBookingView({silent:true});},AUTO_REFRESH_MS);
 
+    bindThaiNationalIdInput();
+
     $('patient-form').addEventListener('submit',async event=>{
       event.preventDefault();
       const form=event.currentTarget;
       if(!selectedDate||!selectedSlot){const e=new Error('กรุณาเลือกวันและเวลาตรวจก่อน');showMessage(e.message,'error');ESTUi.notifyError(e,'ข้อมูลการจองไม่ครบ',window);return;}
       const button=$('submit-booking');busy(button,true);showMessage('','');
       try{
-        const thaiNationalId=ESTUi.normalizeThaiNationalId(form.elements.thaiNationalId.value);
-        if(!ESTUi.isValidThaiNationalId(thaiNationalId)){const invalid=new Error('เลขบัตรประชาชนไม่ถูกต้อง');invalid.code='INVALID_THAI_ID';throw invalid;}
+        const thaiIdCheck=ESTUi.validateThaiNationalId(form.elements.thaiNationalId.value);
+        const thaiNationalId=thaiIdCheck.normalized;
+        if(!thaiIdCheck.valid){
+          const invalid=new Error(thaiIdCheck.reason==='LENGTH'?'เลขบัตรประชาชนต้องมีตัวเลขครบ 13 หลัก':'เลขหลักตรวจสอบของบัตรประชาชนไม่ถูกต้อง');
+          invalid.code=thaiIdCheck.reason==='LENGTH'?'INVALID_THAI_ID_LENGTH':'INVALID_THAI_ID_CHECKSUM';
+          throw invalid;
+        }
         const data={
           firstName:String(form.elements.firstName.value||'').trim(),
           lastName:String(form.elements.lastName.value||'').trim(),

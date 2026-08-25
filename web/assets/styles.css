@@ -34,3 +34,7 @@ dialog{width:min(720px,calc(100% - 24px));max-height:90vh;padding:0;border:0;bor
 @media(max-width:760px){.weekday-row span:nth-child(6),.weekday-row span:nth-child(7){padding:3px 1px}.month-day.state-full .day-status{font-weight:800}}
 .est-alert-fallback{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:20px;background:rgba(20,39,47,.46);backdrop-filter:blur(2px)}
 .est-alert-box{width:min(92vw,430px);background:#fff;border-radius:20px;padding:26px 24px;box-shadow:0 24px 70px rgba(22,47,58,.25);text-align:center}.est-alert-box h2{margin:12px 0 8px}.est-alert-box p{white-space:pre-line;color:#526a74;margin:0 0 18px}.est-alert-icon{width:64px;height:64px;margin:0 auto;border-radius:50%;display:grid;place-items:center;font-size:2rem;font-weight:900}.est-alert-success{background:#e9f8ef;color:#23814b}.est-alert-error{background:#fff0ee;color:#a84236}.est-alert-warning{background:#fff6df;color:#9b6a13}.est-alert-info{background:#edf7fa;color:#246f7d}
+
+/* Thai national ID inline validation feedback */
+#thaiNationalIdHelp[data-state="valid"]{color:#18794e;font-weight:600}
+#thaiNationalIdHelp[data-state="invalid"]{color:#b42318;font-weight:600}

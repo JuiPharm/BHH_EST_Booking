@@ -110,16 +110,24 @@
     return String(value===null||value===undefined?'':value).replace(/[&<>'"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch];});
   }
   function normalizeThaiNationalId(value){
-    return String(value===null||value===undefined?'':value).replace(/\D/g,'');
+    const thaiDigits='๐๑๒๓๔๕๖๗๘๙';
+    const fullWidthDigits='０１２３４５６７８９';
+    return String(value===null||value===undefined?'':value)
+      .replace(/[๐-๙]/g,function(ch){return String(thaiDigits.indexOf(ch));})
+      .replace(/[０-９]/g,function(ch){return String(fullWidthDigits.indexOf(ch));})
+      .replace(/\D/g,'');
   }
-  function isValidThaiNationalId(value){
+  function validateThaiNationalId(value){
     const id=normalizeThaiNationalId(value);
-    if(!/^\d{13}$/.test(id))return false;
+    if(id.length!==13)return {valid:false,reason:'LENGTH',normalized:id};
+    if(!/^\d{13}$/.test(id))return {valid:false,reason:'FORMAT',normalized:id};
     let sum=0;
     for(let i=0;i<12;i+=1)sum+=Number(id.charAt(i))*(13-i);
     const expected=(11-(sum%11))%10;
-    return expected===Number(id.charAt(12));
+    if(expected!==Number(id.charAt(12)))return {valid:false,reason:'CHECKSUM',normalized:id};
+    return {valid:true,reason:'',normalized:id};
   }
+  function isValidThaiNationalId(value){return validateThaiNationalId(value).valid;}
   function notificationHost(host){
     if(host)return host;
     if(typeof window!=='undefined')return window;
@@ -159,5 +167,5 @@
     const text=message+(code?'\nError code: '+code:'')+(requestId?'\nReference: '+requestId:'');
     return notifySweetAlert({icon:'error',title:String(title||'เกิดข้อผิดพลาด'),text:text},host);
   }
-  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,monthRange,shiftMonth,monthGrid,calendarWeekendClass,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,publicAvailabilityLabel,createLatestRequestGate,escapeHtml,normalizeThaiNationalId,isValidThaiNationalId,notifySweetAlert,notifySuccess,notifyWarning,notifyError};
+  return {parseIsoDateUTC,toIsoDateUTC,shiftIsoDate,monthRange,shiftMonth,monthGrid,calendarWeekendClass,weekRangeMonday,formatThaiDate,todayIso,flattenAdminSlots,publicAvailabilityLabel,createLatestRequestGate,escapeHtml,normalizeThaiNationalId,validateThaiNationalId,isValidThaiNationalId,notifySweetAlert,notifySuccess,notifyWarning,notifyError};
 });

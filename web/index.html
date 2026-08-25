@@ -27,7 +27,7 @@
         <div class="field"><label for="dob">วันเกิด</label><input id="dob" type="date" name="dob" required></div>
         <div class="field"><label for="phone">เบอร์โทร</label><input id="phone" name="phone" inputmode="tel" required></div>
         <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required></div>
-        <div class="field"><label for="thaiNationalId">เลขบัตรประชาชน</label><input id="thaiNationalId" name="thaiNationalId" inputmode="numeric" autocomplete="off" required minlength="13" maxlength="13"></div>
+        <div class="field"><label for="thaiNationalId">เลขบัตรประชาชน</label><input id="thaiNationalId" name="thaiNationalId" inputmode="numeric" autocomplete="off" required maxlength="20" aria-describedby="thaiNationalIdHelp" placeholder="x-xxxx-xxxxx-xx-x"><small id="thaiNationalIdHelp" class="muted">กรอกเลข 13 หลักจากบัตร ระบบรองรับตัวเลขไทย/อังกฤษและการพิมพ์มีขีด</small></div>
       </div>
       <div class="field field-wide"><label for="underlyingDisease">โรคประจำตัว</label><textarea id="underlyingDisease" name="underlyingDisease" required placeholder="หากไม่มี กรุณาระบุว่า ไม่มี"></textarea></div>
       <div class="actions"><button class="btn btn-primary" id="submit-booking" type="submit">ยืนยันการจอง</button></div>
